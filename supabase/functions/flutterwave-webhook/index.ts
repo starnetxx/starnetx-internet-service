@@ -292,23 +292,24 @@ serve(async (req) => {
     console.log("Transaction record created successfully");
 
     // Log the successful wallet funding
-    await supabase.from("admin_logs").insert([
-      {
-        admin_id: null,
-        action: "wallet_funding_webhook",
-        details: {
-          user_id: userProfile.id,
-          amount: originalAmount,
-          tx_ref,
-          flw_ref,
-          previous_balance: userProfile.wallet_balance,
-          new_balance: newBalance,
-          service_charge: chargeAmount > 0 ? chargeAmount : null
-        }
-      }
-    ]);
+    // Note: admin_logs table doesn't exist in current schema, commenting out to prevent errors
+    // await supabase.from("admin_logs").insert([
+    //   {
+    //     admin_id: null,
+    //     action: "wallet_funding_webhook",
+    //     details: {
+    //       user_id: userProfile.id,
+    //       amount: originalAmount,
+    //       tx_ref,
+    //       flw_ref,
+    //       previous_balance: userProfile.wallet_balance,
+    //       new_balance: newBalance,
+    //       service_charge: chargeAmount > 0 ? chargeAmount : null
+    //     }
+    //   }
+    // ]);
 
-    console.log("Admin log created successfully");
+    console.log("Webhook processing completed successfully (admin_logs insertion skipped)");
 
     console.log("=== WEBHOOK PROCESSED SUCCESSFULLY ===");
     console.log("User wallet funded:", {

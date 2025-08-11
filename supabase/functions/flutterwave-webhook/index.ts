@@ -3,9 +3,46 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, flutterwave-signature",
   "Access-Control-Allow-Methods": "POST, OPTIONS"
 };
+
+// Helper function to verify Flutterwave webhook signature
+async function verifyFlutterwaveSignature(rawBody: string, signature: string, secretHash: string): Promise<boolean> {
+  try {
+    // Convert string to ArrayBuffer
+    const encoder = new TextEncoder();
+    const data = encoder.encode(rawBody);
+    
+    // Import crypto key
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(secretHash),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    
+    // Sign the data
+    const signedData = await crypto.subtle.sign('HMAC', key, data);
+    
+    // Convert to base64
+    const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary);
+    };
+    
+    const computedSignature = arrayBufferToBase64(signedData);
+    return computedSignature === signature;
+  } catch (error) {
+    console.error('Error verifying signature:', error);
+    return false;
+  }
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -17,13 +54,64 @@ serve(async (req) => {
   }
 
   try {
-    console.log("=== WEBHOOK RECEIVED ===");
+    console.log("=== FLUTTERWAVE WEBHOOK RECEIVED ===");
     console.log("Method:", req.method);
     console.log("Headers:", Object.fromEntries(req.headers.entries()));
     
+    // Get the raw body for signature verification
+    const rawBody = await req.text();
+    console.log('Raw webhook body:', rawBody);
+    
     // Parse payload as JSON
-    const payload = await req.json();
-    console.log('Webhook payload:', JSON.stringify(payload, null, 2));
+    let payload;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch (error) {
+      console.error('Failed to parse JSON payload:', error);
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Invalid JSON payload"
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    
+    console.log('Parsed webhook payload:', JSON.stringify(payload, null, 2));
+
+    // Get Flutterwave secret hash for verification
+    const secretHash = Deno.env.get('FLW_SECRET_HASH');
+    if (!secretHash) {
+      console.error('FLW_SECRET_HASH not configured');
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Webhook secret not configured"
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Verify webhook signature
+    const flutterwaveSignature = req.headers.get('flutterwave-signature');
+    if (flutterwaveSignature) {
+      console.log('Verifying Flutterwave signature...');
+      const isValidSignature = await verifyFlutterwaveSignature(rawBody, flutterwaveSignature, secretHash);
+      
+      if (!isValidSignature) {
+        console.error('Invalid webhook signature');
+        return new Response(JSON.stringify({
+          success: false,
+          error: "Invalid signature"
+        }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      console.log('Signature verification successful');
+    } else {
+      console.log('No signature header found, skipping verification');
+    }
 
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
@@ -36,139 +124,136 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     console.log('Supabase client initialized');
 
-    // Check for various possible event types and statuses
-    const eventType = payload.type || payload.event;
-    const eventData = payload.data || payload;
-    const status = eventData?.status;
+    // Extract event details
+    const eventType = payload.type;
+    const eventData = payload.data;
+    const webhookId = payload.id;
+    const timestamp = payload.timestamp;
     
-    console.log('Event analysis:', {
+    console.log('Event details:', {
       eventType,
-      status,
+      webhookId,
+      timestamp,
       hasData: !!eventData,
       dataKeys: eventData ? Object.keys(eventData) : []
     });
 
-    // Accept multiple event types that could indicate successful payment
-    const validEvents = ['charge.completed', 'transfer.completed', 'payment.completed'];
-    const validStatuses = ['succeeded', 'successful', 'completed'];
-    
-    const isValidEvent = validEvents.includes(eventType);
-    const isValidStatus = validStatuses.includes(status);
-    
-    console.log('Event validation:', { isValidEvent, isValidStatus });
-
-    if (!isValidEvent || !isValidStatus) {
-      console.log('Not a valid payment completion event, ignoring');
+    // Check if this is a charge.completed event for successful payment
+    if (eventType !== 'charge.completed') {
+      console.log('Not a charge.completed event, ignoring');
       return new Response(JSON.stringify({
         success: true,
-        message: 'Event ignored - not a payment completion'
+        message: 'Event ignored - not a charge.completed event'
       }), {
         status: 200,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    // Extract relevant data from the webhook
-    const flw_ref = eventData.id || eventData.flw_ref;
-    const tx_ref = eventData.reference || eventData.tx_ref;
-    const amount = eventData.amount;
-    const currency = eventData.currency;
-    const email = eventData.customer?.email;
+    // Check if payment is successful
+    if (eventData?.status !== 'succeeded') {
+      console.log('Payment not successful, ignoring');
+      return new Response(JSON.stringify({
+        success: true,
+        message: 'Event ignored - payment not successful'
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
 
-    console.log('Extracted payment data:', { 
-      flw_ref, 
-      tx_ref, 
-      amount, 
-      currency, 
-      email,
-      hasCustomer: !!eventData.customer
+    // Extract payment data
+    const {
+      id: chargeId,
+      amount,
+      currency,
+      reference: txRef,
+      customer,
+      payment_method,
+      created_datetime
+    } = eventData;
+
+    const customerEmail = customer?.email;
+    
+    console.log('Payment data extracted:', {
+      chargeId,
+      amount,
+      currency,
+      txRef,
+      customerEmail,
+      paymentMethod: payment_method?.type,
+      createdDatetime: created_datetime
     });
 
-    if (!amount || !email) {
+    if (!amount || !customerEmail || !txRef) {
       console.error('Missing required payment data');
-      throw new Error('Missing required payment data (amount or email)');
+      throw new Error('Missing required payment data (amount, email, or reference)');
     }
 
     // Check if this transaction has already been processed (idempotency)
-    if (flw_ref) {
-      const { data: existingTransaction, error: txCheckError } = await supabase
-        .from("transactions")
-        .select("id")
-        .eq("flutterwave_tx_ref", flw_ref)
-        .eq("status", "success")
-        .maybeSingle();
+    const { data: existingTransaction, error: txCheckError } = await supabase
+      .from("transactions")
+      .select("id")
+      .eq("flutterwave_tx_ref", chargeId)
+      .eq("status", "success")
+      .maybeSingle();
 
-      if (txCheckError) {
-        console.error("Error checking for existing transaction:", txCheckError);
-      }
-
-      if (existingTransaction) {
-        console.log("Transaction already processed:", flw_ref);
-        return new Response(JSON.stringify({
-          success: true,
-          message: "Transaction already processed"
-        }), {
-          status: 200,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json"
-          }
-        });
-      }
+    if (txCheckError) {
+      console.error("Error checking for existing transaction:", txCheckError);
     }
 
-    // Find the user by the virtual account reference (tx_ref) or email
+    if (existingTransaction) {
+      console.log("Transaction already processed:", chargeId);
+      return new Response(JSON.stringify({
+        success: true,
+        message: "Transaction already processed"
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // Find the user by the virtual account reference (txRef)
     let userProfile;
-    
-    if (tx_ref) {
-      const { data: profileData, error: userError } = await supabase
-        .from("profiles")
-        .select("id, wallet_balance, email")
-        .eq("virtual_account_reference", tx_ref)
-        .single();
+    const { data: profileData, error: userError } = await supabase
+      .from("profiles")
+      .select("id, wallet_balance, email, virtual_account_reference")
+      .eq("virtual_account_reference", txRef)
+      .single();
 
-      if (userError) {
-        console.log("User not found by virtual_account_reference:", tx_ref);
-      } else {
-        userProfile = profileData;
-        console.log("User found by virtual account reference");
-      }
-    }
-
-    // If not found by tx_ref, try email
-    if (!userProfile && email) {
-      console.log("Trying to find user by email:", email);
+    if (userError) {
+      console.log("User not found by virtual_account_reference:", txRef);
+      
+      // Try to find by email as fallback
       const { data: userByEmail, error: emailError } = await supabase
         .from("profiles")
-        .select("id, wallet_balance, email")
-        .eq("email", email)
+        .select("id, wallet_balance, email, virtual_account_reference")
+        .eq("email", customerEmail)
         .single();
 
       if (emailError || !userByEmail) {
-        console.error("Error finding user profile by email:", emailError);
-      } else {
-        userProfile = userByEmail;
-        console.log("User found by email fallback");
+        console.error("Error finding user profile:", userError);
+        throw new Error("User profile not found for this transaction reference");
       }
-    }
-
-    if (!userProfile) {
-      throw new Error("User profile not found for this transaction");
+      
+      userProfile = userByEmail;
+      console.log("User found by email fallback");
+    } else {
+      userProfile = profileData;
+      console.log("User found by virtual account reference");
     }
 
     // Verify the email matches (additional security check)
-    if (userProfile.email !== email) {
-      console.error("Email mismatch:", userProfile.email, email);
+    if (userProfile.email !== customerEmail) {
+      console.error("Email mismatch:", userProfile.email, customerEmail);
       throw new Error("Email mismatch in transaction");
     }
 
     console.log("Processing payment for user:", {
       user_id: userProfile.id,
       current_balance: userProfile.wallet_balance,
-      payment_amount: amount
+      payment_amount: amount,
+      virtual_account_ref: userProfile.virtual_account_reference
     });
 
     // Get funding charge settings
@@ -262,10 +347,10 @@ serve(async (req) => {
       type: "wallet_funding",
       amount: originalAmount,
       status: "success",
-      reference: `FLW-${flw_ref || tx_ref || Date.now()}`,
-      flutterwave_tx_ref: flw_ref,
+      reference: `FLW-${chargeId}`,
+      flutterwave_tx_ref: chargeId,
       details: {
-        payment_method: "bank_transfer",
+        payment_method: payment_method?.type || "bank_transfer",
         currency,
         flutterwave_data: eventData,
         service_charge: chargeAmount > 0 ? {
@@ -299,8 +384,8 @@ serve(async (req) => {
         details: {
           user_id: userProfile.id,
           amount: originalAmount,
-          tx_ref,
-          flw_ref,
+          tx_ref: txRef,
+          flw_ref: chargeId,
           previous_balance: userProfile.wallet_balance,
           new_balance: newBalance,
           service_charge: chargeAmount > 0 ? chargeAmount : null
@@ -315,7 +400,8 @@ serve(async (req) => {
       user_id: userProfile.id,
       amount: originalAmount,
       new_balance: newBalance,
-      transaction_id: flw_ref || tx_ref
+      transaction_id: chargeId,
+      virtual_account_ref: txRef
     });
 
     // Return success response (200 status required by Flutterwave)
@@ -325,14 +411,12 @@ serve(async (req) => {
       details: {
         user_id: userProfile.id,
         amount: originalAmount,
-        new_balance: newBalance
+        new_balance: newBalance,
+        transaction_id: chargeId
       }
     }), {
       status: 200,
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "application/json"
-      }
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
 
   } catch (error) {
@@ -346,10 +430,7 @@ serve(async (req) => {
       timestamp: new Date().toISOString()
     }), {
       status: 500,
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "application/json"
-      }
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }
 });

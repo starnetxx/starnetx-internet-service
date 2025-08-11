@@ -3,50 +3,16 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, flutterwave-signature",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, verif-hash",
   "Access-Control-Allow-Methods": "POST, OPTIONS"
 };
 
-// Helper function to verify Flutterwave webhook signature
-async function verifyFlutterwaveSignature(rawBody: string, signature: string, secretHash: string): Promise<boolean> {
-  try {
-    // Convert string to ArrayBuffer
-    const encoder = new TextEncoder();
-    const data = encoder.encode(rawBody);
-    
-    // Import crypto key
-    const key = await crypto.subtle.importKey(
-      'raw',
-      encoder.encode(secretHash),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    );
-    
-    // Sign the data
-    const signedData = await crypto.subtle.sign('HMAC', key, data);
-    
-    // Convert to base64
-    const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
-      const bytes = new Uint8Array(buffer);
-      let binary = '';
-      for (let i = 0; i < bytes.byteLength; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      return btoa(binary);
-    };
-    
-    const computedSignature = arrayBufferToBase64(signedData);
-    return computedSignature === signature;
-  } catch (error) {
-    console.error('Error verifying signature:', error);
-    return false;
-  }
-}
-
 serve(async (req) => {
+  console.log(`🔔 Webhook received: ${req.method} ${req.url}`);
+  
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
+    console.log("📋 Handling CORS preflight request");
     return new Response(null, {
       status: 204,
       headers: corsHeaders
@@ -54,206 +20,192 @@ serve(async (req) => {
   }
 
   try {
-    console.log("=== FLUTTERWAVE WEBHOOK RECEIVED ===");
-    console.log("Method:", req.method);
-    console.log("Headers:", Object.fromEntries(req.headers.entries()));
-    
-    // Get the raw body for signature verification
-    const rawBody = await req.text();
-    console.log('Raw webhook body:', rawBody);
-    
-    // Parse payload as JSON
-    let payload;
-    try {
-      payload = JSON.parse(rawBody);
-    } catch (error) {
-      console.error('Failed to parse JSON payload:', error);
-      return new Response(JSON.stringify({
-        success: false,
-        error: "Invalid JSON payload"
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-    
-    console.log('Parsed webhook payload:', JSON.stringify(payload, null, 2));
+    // Log all headers for debugging
+    console.log("📥 Request headers:", Object.fromEntries(req.headers.entries()));
 
-    // Get Flutterwave secret hash for verification
-    const secretHash = Deno.env.get('FLW_SECRET_HASH');
-    if (!secretHash) {
-      console.error('FLW_SECRET_HASH not configured');
-      return new Response(JSON.stringify({
-        success: false,
-        error: "Webhook secret not configured"
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+    // Get Flutterwave secret key for verification
+    const flutterwaveSecretKey = Deno.env.get("FLUTTERWAVE_SECRET_KEY");
+    if (!flutterwaveSecretKey) {
+      console.error("❌ Flutterwave secret key not configured");
+      throw new Error("Flutterwave secret key not configured");
     }
 
-    // Verify webhook signature
-    const flutterwaveSignature = req.headers.get('flutterwave-signature');
-    if (flutterwaveSignature) {
-      console.log('Verifying Flutterwave signature...');
-      const isValidSignature = await verifyFlutterwaveSignature(rawBody, flutterwaveSignature, secretHash);
-      
-      if (!isValidSignature) {
-        console.error('Invalid webhook signature');
-        return new Response(JSON.stringify({
-          success: false,
-          error: "Invalid signature"
-        }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
-      console.log('Signature verification successful');
-    } else {
-      console.log('No signature header found, skipping verification');
-    }
-
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    // Initialize Supabase client with service role key for admin access
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     
     if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Supabase configuration missing');
+      console.error("❌ Supabase configuration missing");
+      throw new Error("Supabase configuration missing");
     }
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    console.log('Supabase client initialized');
+    console.log("✅ Supabase client initialized");
 
-    // Extract event details
-    const eventType = payload.type;
-    const eventData = payload.data;
-    const webhookId = payload.id;
-    const timestamp = payload.timestamp;
+    // Get the signature from the request headers
+    const signature = req.headers.get("verif-hash");
+    console.log("🔐 Webhook signature received:", signature ? "Yes" : "No");
     
-    console.log('Event details:', {
-      eventType,
-      webhookId,
-      timestamp,
-      hasData: !!eventData,
-      dataKeys: eventData ? Object.keys(eventData) : []
+    // Parse webhook payload first to get the data
+    let payload;
+    try {
+      const rawBody = await req.text();
+      console.log("📦 Raw webhook payload:", rawBody);
+      payload = JSON.parse(rawBody);
+    } catch (error) {
+      console.error("❌ Failed to parse webhook payload:", error);
+      throw new Error("Invalid JSON payload");
+    }
+
+    // In production, verify the signature (uncomment for production)
+    /*
+    if (!signature) {
+      console.error("❌ Missing webhook signature");
+      return new Response(
+        JSON.stringify({ success: false, error: "Missing signature" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Verify signature matches Flutterwave's hash
+    const crypto = await import("node:crypto");
+    const hash = crypto.createHmac("sha256", flutterwaveSecretKey).update(JSON.stringify(payload)).digest("hex");
+    
+    if (hash !== signature) {
+      console.error("❌ Invalid webhook signature");
+      return new Response(
+        JSON.stringify({ success: false, error: "Invalid signature" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+    */
+
+    console.log("📋 Webhook payload processed:", {
+      event: payload.event,
+      payment_type: payload.data?.payment_type,
+      status: payload.data?.status,
+      tx_ref: payload.data?.tx_ref,
+      flw_ref: payload.data?.flw_ref
     });
 
-    // Check if this is a charge.completed event for successful payment
-    if (eventType !== 'charge.completed') {
-      console.log('Not a charge.completed event, ignoring');
+    // Verify this is a charge.completed event for a bank transfer
+    if (payload.event !== "charge.completed" || 
+        payload.data?.payment_type !== "bank_transfer" || 
+        payload.data?.status !== "successful") {
+      
+      console.log("ℹ️ Not a successful bank transfer event, ignoring");
       return new Response(JSON.stringify({
         success: true,
-        message: 'Event ignored - not a charge.completed event'
+        message: "Event ignored - not a successful bank transfer"
       }), {
         status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
       });
     }
 
-    // Check if payment is successful
-    if (eventData?.status !== 'succeeded') {
-      console.log('Payment not successful, ignoring');
-      return new Response(JSON.stringify({
-        success: true,
-        message: 'Event ignored - payment not successful'
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
+    // Extract relevant data from the webhook
+    const { tx_ref, flw_ref, amount, currency, customer } = payload.data;
+    const email = customer?.email;
+
+    if (!tx_ref || !flw_ref || !amount || !email) {
+      console.error("❌ Missing required fields in webhook data:", {
+        tx_ref: !!tx_ref,
+        flw_ref: !!flw_ref,
+        amount: !!amount,
+        email: !!email
       });
+      throw new Error("Missing required fields in webhook payload");
     }
 
-    // Extract payment data
-    const {
-      id: chargeId,
-      amount,
+    console.log("💰 Processing transaction:", {
+      tx_ref,
+      flw_ref,
+      amount: parseFloat(amount),
       currency,
-      reference: txRef,
-      customer,
-      payment_method,
-      created_datetime
-    } = eventData;
-
-    const customerEmail = customer?.email;
-    
-    console.log('Payment data extracted:', {
-      chargeId,
-      amount,
-      currency,
-      txRef,
-      customerEmail,
-      paymentMethod: payment_method?.type,
-      createdDatetime: created_datetime
+      email
     });
-
-    if (!amount || !customerEmail || !txRef) {
-      console.error('Missing required payment data');
-      throw new Error('Missing required payment data (amount, email, or reference)');
-    }
 
     // Check if this transaction has already been processed (idempotency)
     const { data: existingTransaction, error: txCheckError } = await supabase
       .from("transactions")
-      .select("id")
-      .eq("flutterwave_tx_ref", chargeId)
+      .select("id, status")
+      .eq("flutterwave_tx_ref", flw_ref)
       .eq("status", "success")
       .maybeSingle();
 
     if (txCheckError) {
-      console.error("Error checking for existing transaction:", txCheckError);
+      console.error("❌ Error checking for existing transaction:", txCheckError);
     }
 
     if (existingTransaction) {
-      console.log("Transaction already processed:", chargeId);
+      console.log("ℹ️ Transaction already processed:", flw_ref);
       return new Response(JSON.stringify({
         success: true,
         message: "Transaction already processed"
       }), {
         status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json"
+        }
       });
     }
 
-    // Find the user by the virtual account reference (txRef)
-    let userProfile;
+    // Find the user by the virtual account reference (tx_ref)
+    console.log("🔍 Looking up user by virtual_account_reference:", tx_ref);
+    
     const { data: profileData, error: userError } = await supabase
       .from("profiles")
-      .select("id, wallet_balance, email, virtual_account_reference")
-      .eq("virtual_account_reference", txRef)
+      .select("id, wallet_balance, email, first_name, last_name")
+      .eq("virtual_account_reference", tx_ref)
       .single();
 
-    if (userError) {
-      console.log("User not found by virtual_account_reference:", txRef);
+    let userProfile = profileData;
+
+    if (userError || !userProfile) {
+      console.log("⚠️ User not found by virtual_account_reference, trying email fallback");
       
-      // Try to find by email as fallback
+      // Try to find by email as a fallback
       const { data: userByEmail, error: emailError } = await supabase
         .from("profiles")
-        .select("id, wallet_balance, email, virtual_account_reference")
-        .eq("email", customerEmail)
+        .select("id, wallet_balance, email, first_name, last_name")
+        .eq("email", email)
         .single();
 
       if (emailError || !userByEmail) {
-        console.error("Error finding user profile:", userError);
-        throw new Error("User profile not found for this transaction reference");
+        console.error("❌ User not found by either method:", {
+          virtualAccountError: userError?.message,
+          emailError: emailError?.message
+        });
+        throw new Error(`User profile not found for tx_ref: ${tx_ref} or email: ${email}`);
       }
       
+      console.log("✅ User found by email fallback");
       userProfile = userByEmail;
-      console.log("User found by email fallback");
-    } else {
-      userProfile = profileData;
-      console.log("User found by virtual account reference");
     }
 
     // Verify the email matches (additional security check)
-    if (userProfile.email !== customerEmail) {
-      console.error("Email mismatch:", userProfile.email, customerEmail);
+    if (userProfile.email !== email) {
+      console.error("❌ Email mismatch:", {
+        profileEmail: userProfile.email,
+        webhookEmail: email
+      });
       throw new Error("Email mismatch in transaction");
     }
 
-    console.log("Processing payment for user:", {
-      user_id: userProfile.id,
-      current_balance: userProfile.wallet_balance,
-      payment_amount: amount,
-      virtual_account_ref: userProfile.virtual_account_reference
+    console.log("👤 User found:", {
+      id: userProfile.id,
+      email: userProfile.email,
+      currentBalance: userProfile.wallet_balance
     });
 
     // Get funding charge settings
@@ -262,15 +214,14 @@ serve(async (req) => {
       .select("key, value")
       .in("key", [
         "funding_charge_enabled",
-        "funding_charge_type",
+        "funding_charge_type", 
         "funding_charge_value",
         "funding_charge_min_deposit",
         "funding_charge_max_deposit"
       ]);
 
     if (chargeError) {
-      console.error("Error fetching charge settings:", chargeError);
-      // Continue without charges if settings can't be fetched
+      console.error("⚠️ Error fetching charge settings:", chargeError);
     }
 
     // Process funding charges if enabled
@@ -290,10 +241,10 @@ serve(async (req) => {
       const minDeposit = parseFloat(settings.funding_charge_min_deposit || '0');
       const maxDeposit = parseFloat(settings.funding_charge_max_deposit || '0');
 
-      console.log("Charge settings:", {
-        chargesEnabled,
-        chargeType,
-        chargeValue,
+      console.log("💳 Charge settings:", {
+        enabled: chargesEnabled,
+        type: chargeType,
+        value: chargeValue,
         minDeposit,
         maxDeposit
       });
@@ -312,8 +263,8 @@ serve(async (req) => {
         // Ensure charge doesn't exceed the deposit amount
         chargeAmount = Math.min(chargeAmount, originalAmount);
         amountToCredit = originalAmount - chargeAmount;
-        
-        console.log("Charges applied:", {
+
+        console.log("💰 Service charge applied:", {
           originalAmount,
           chargeAmount,
           amountToCredit
@@ -322,11 +273,13 @@ serve(async (req) => {
     }
 
     // Update user's wallet balance
-    const newBalance = parseFloat(userProfile.wallet_balance || '0') + amountToCredit;
-    console.log("Updating wallet balance:", {
-      from: userProfile.wallet_balance,
-      to: newBalance,
-      added: amountToCredit
+    const currentBalance = parseFloat(userProfile.wallet_balance || '0');
+    const newBalance = currentBalance + amountToCredit;
+    
+    console.log("💼 Updating wallet balance:", {
+      previous: currentBalance,
+      adding: amountToCredit,
+      new: newBalance
     });
 
     const { error: updateError } = await supabase
@@ -335,11 +288,9 @@ serve(async (req) => {
       .eq("id", userProfile.id);
 
     if (updateError) {
-      console.error("Error updating wallet balance:", updateError);
+      console.error("❌ Error updating wallet balance:", updateError);
       throw new Error("Failed to update wallet balance");
     }
-
-    console.log("Wallet balance updated successfully");
 
     // Create a transaction record
     const transactionData = {
@@ -347,12 +298,13 @@ serve(async (req) => {
       type: "wallet_funding",
       amount: originalAmount,
       status: "success",
-      reference: `FLW-${chargeId}`,
-      flutterwave_tx_ref: chargeId,
+      reference: `FLW-${flw_ref}`,
+      flutterwave_tx_ref: flw_ref,
       details: {
-        payment_method: payment_method?.type || "bank_transfer",
+        payment_method: "bank_transfer",
         currency,
-        flutterwave_data: eventData,
+        tx_ref,
+        flutterwave_data: payload.data,
         service_charge: chargeAmount > 0 ? {
           amount: chargeAmount,
           type: chargeSettings?.find((s) => s.key === 'funding_charge_type')?.value || 'percentage',
@@ -363,74 +315,75 @@ serve(async (req) => {
       }
     };
 
-    console.log("Creating transaction record:", transactionData);
-
+    console.log("📝 Creating transaction record");
     const { error: transactionError } = await supabase
       .from("transactions")
       .insert([transactionData]);
 
     if (transactionError) {
-      console.error("Error creating transaction record:", transactionError);
+      console.error("❌ Error creating transaction record:", transactionError);
       throw new Error("Failed to create transaction record");
     }
 
-    console.log("Transaction record created successfully");
-
     // Log the successful wallet funding
+    console.log("📊 Creating admin log");
     await supabase.from("admin_logs").insert([
       {
         admin_id: null,
         action: "wallet_funding_webhook",
         details: {
           user_id: userProfile.id,
+          user_email: userProfile.email,
           amount: originalAmount,
-          tx_ref: txRef,
-          flw_ref: chargeId,
-          previous_balance: userProfile.wallet_balance,
+          tx_ref,
+          flw_ref,
+          previous_balance: currentBalance,
           new_balance: newBalance,
-          service_charge: chargeAmount > 0 ? chargeAmount : null
+          service_charge: chargeAmount > 0 ? chargeAmount : null,
+          timestamp: new Date().toISOString()
         }
       }
     ]);
 
-    console.log("Admin log created successfully");
+    console.log("🎉 Webhook processing completed successfully");
 
-    console.log("=== WEBHOOK PROCESSED SUCCESSFULLY ===");
-    console.log("User wallet funded:", {
-      user_id: userProfile.id,
-      amount: originalAmount,
-      new_balance: newBalance,
-      transaction_id: chargeId,
-      virtual_account_ref: txRef
-    });
-
-    // Return success response (200 status required by Flutterwave)
+    // Return success response
     return new Response(JSON.stringify({
       success: true,
       message: "Wallet funded successfully",
-      details: {
+      data: {
         user_id: userProfile.id,
-        amount: originalAmount,
+        amount_credited: amountToCredit,
         new_balance: newBalance,
-        transaction_id: chargeId
+        transaction_ref: `FLW-${flw_ref}`
       }
     }), {
       status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
     });
 
   } catch (error) {
-    console.error("=== WEBHOOK ERROR ===");
-    console.error("Error processing webhook:", error);
-    console.error("Error stack:", error.stack);
+    console.error("💥 Webhook processing error:", error);
     
+    // Log error for debugging
+    console.error("Error details:", {
+      message: error.message,
+      stack: error.stack
+    });
+
     return new Response(JSON.stringify({
       success: false,
       error: error.message || "Failed to process webhook",
       timestamp: new Date().toISOString()
     }), {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json"
+      }
     });
   }
 });

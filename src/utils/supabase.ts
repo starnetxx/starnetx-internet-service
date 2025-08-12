@@ -176,8 +176,14 @@ export interface Database {
           location_id: string | null
           credential_id: string | null
           amount: number
-          type: 'wallet_topup' | 'plan_purchase'
-          status: 'pending' | 'completed' | 'failed'
+          type: 'wallet_topup' | 'plan_purchase' | 'wallet_funding'
+          status: 'pending' | 'completed' | 'failed' | 'success'
+          reference?: string
+          flutterwave_reference?: string
+          flutterwave_tx_ref?: string
+          payment_method?: string
+          details?: any
+          metadata?: any
           mikrotik_username: string | null
           mikrotik_password: string | null
           expires_at: string | null
@@ -193,8 +199,14 @@ export interface Database {
           location_id?: string | null
           credential_id?: string | null
           amount: number
-          type: 'wallet_topup' | 'plan_purchase'
-          status?: 'pending' | 'completed' | 'failed'
+          type: 'wallet_topup' | 'plan_purchase' | 'wallet_funding'
+          status?: 'pending' | 'completed' | 'failed' | 'success'
+          reference?: string
+          flutterwave_reference?: string
+          flutterwave_tx_ref?: string
+          payment_method?: string
+          details?: any
+          metadata?: any
           mikrotik_username?: string | null
           mikrotik_password?: string | null
           expires_at?: string | null
@@ -210,8 +222,14 @@ export interface Database {
           location_id?: string | null
           credential_id?: string | null
           amount?: number
-          type?: 'wallet_topup' | 'plan_purchase'
-          status?: 'pending' | 'completed' | 'failed'
+          type?: 'wallet_topup' | 'plan_purchase' | 'wallet_funding'
+          status?: 'pending' | 'completed' | 'failed' | 'success'
+          reference?: string
+          flutterwave_reference?: string
+          flutterwave_tx_ref?: string
+          payment_method?: string
+          details?: any
+          metadata?: any
           mikrotik_username?: string | null
           mikrotik_password?: string | null
           expires_at?: string | null

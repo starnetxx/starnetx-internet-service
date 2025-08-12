@@ -1,19 +1,34 @@
-const fetch = require('node-fetch');
+import fetch from 'node-fetch';
 
-const testPayload = {
+// const testPayload = {
+//   "event": "charge.completed",
+//   "data": {
+//     "payment_type": "bank_transfer",
+//     "status": "successful",
+//     "tx_ref": "TEST-USER-123-1693123456", // Replace with actual virtual_account_reference
+//     "flw_ref": "FLW-TEST-" + Date.now(),
+//     "amount": 1000,
+//     "currency": "NGN",
+//     "customer": {
+//       "email": "test@example.com" // Replace with actual user email
+//     }
+//   }
+// };
+
+const testPayload ={
   "event": "charge.completed",
   "data": {
     "payment_type": "bank_transfer",
     "status": "successful",
-    "tx_ref": "TEST-USER-123-1693123456", // Replace with actual virtual_account_reference
-    "flw_ref": "FLW-TEST-" + Date.now(),
-    "amount": 1000,
+    "tx_ref": "starnetx-1754954718951-985",
+    "flw_ref": "100004250811235820138822790790",
+    "amount": 100,
     "currency": "NGN",
     "customer": {
-      "email": "test@example.com" // Replace with actual user email
+      "email": "aleeyuwada01@gmail.com"
     }
   }
-};
+}
 
 const webhookUrl = 'https://xgvxtnvdxqqeehjrvkwr.supabase.co/functions/v1/flutterwave-webhook';
 

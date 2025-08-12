@@ -208,69 +208,14 @@ serve(async (req) => {
       currentBalance: userProfile.wallet_balance
     });
 
-    // Get funding charge settings
-    const { data: chargeSettings, error: chargeError } = await supabase
-      .from("admin_settings")
-      .select("key, value")
-      .in("key", [
-        "funding_charge_enabled",
-        "funding_charge_type", 
-        "funding_charge_value",
-        "funding_charge_min_deposit",
-        "funding_charge_max_deposit"
-      ]);
+    // NO CHARGES - User receives full amount
+    const originalAmount = parseFloat(amount);
+    const amountToCredit = originalAmount; // Full amount, no deductions
 
-    if (chargeError) {
-      console.error("⚠️ Error fetching charge settings:", chargeError);
-    }
-
-    // Process funding charges if enabled
-    let chargeAmount = 0;
-    let originalAmount = parseFloat(amount);
-    let amountToCredit = originalAmount;
-
-    if (chargeSettings && chargeSettings.length > 0) {
-      const settings = {};
-      chargeSettings.forEach((setting) => {
-        settings[setting.key] = setting.value;
-      });
-
-      const chargesEnabled = settings.funding_charge_enabled === 'true';
-      const chargeType = settings.funding_charge_type || 'percentage';
-      const chargeValue = parseFloat(settings.funding_charge_value || '0');
-      const minDeposit = parseFloat(settings.funding_charge_min_deposit || '0');
-      const maxDeposit = parseFloat(settings.funding_charge_max_deposit || '0');
-
-      console.log("💳 Charge settings:", {
-        enabled: chargesEnabled,
-        type: chargeType,
-        value: chargeValue,
-        minDeposit,
-        maxDeposit
-      });
-
-      // Apply charges if enabled and amount is within range
-      if (chargesEnabled && chargeValue > 0 && 
-          (minDeposit === 0 || originalAmount >= minDeposit) && 
-          (maxDeposit === 0 || originalAmount <= maxDeposit)) {
-        
-        if (chargeType === 'percentage') {
-          chargeAmount = originalAmount * (chargeValue / 100);
-        } else {
-          chargeAmount = chargeValue;
-        }
-        
-        // Ensure charge doesn't exceed the deposit amount
-        chargeAmount = Math.min(chargeAmount, originalAmount);
-        amountToCredit = originalAmount - chargeAmount;
-
-        console.log("💰 Service charge applied:", {
-          originalAmount,
-          chargeAmount,
-          amountToCredit
-        });
-      }
-    }
+    console.log("💰 No charges applied - user receives full amount:", {
+      originalAmount,
+      amountToCredit
+    });
 
     // Update user's wallet balance
     const currentBalance = parseFloat(userProfile.wallet_balance || '0');
@@ -292,6 +237,8 @@ serve(async (req) => {
       throw new Error("Failed to update wallet balance");
     }
 
+    console.log("✅ Wallet balance updated successfully");
+
     // Create a transaction record
     const transactionData = {
       user_id: userProfile.id,
@@ -305,13 +252,8 @@ serve(async (req) => {
         currency,
         tx_ref,
         flutterwave_data: payload.data,
-        service_charge: chargeAmount > 0 ? {
-          amount: chargeAmount,
-          type: chargeSettings?.find((s) => s.key === 'funding_charge_type')?.value || 'percentage',
-          value: parseFloat(chargeSettings?.find((s) => s.key === 'funding_charge_value')?.value || '0'),
-          original_amount: originalAmount,
-          credited_amount: amountToCredit
-        } : null
+        service_charge: null, // No charges
+        note: "Full amount credited - no service charges"
       }
     };
 
@@ -324,6 +266,8 @@ serve(async (req) => {
       console.error("❌ Error creating transaction record:", transactionError);
       throw new Error("Failed to create transaction record");
     }
+
+    console.log("✅ Transaction record created successfully");
 
     // Log the successful wallet funding
     console.log("📊 Creating admin log");
@@ -339,7 +283,8 @@ serve(async (req) => {
           flw_ref,
           previous_balance: currentBalance,
           new_balance: newBalance,
-          service_charge: chargeAmount > 0 ? chargeAmount : null,
+          service_charge: null, // No charges
+          note: "Full amount credited - no service charges",
           timestamp: new Date().toISOString()
         }
       }
@@ -350,12 +295,13 @@ serve(async (req) => {
     // Return success response
     return new Response(JSON.stringify({
       success: true,
-      message: "Wallet funded successfully",
+      message: "Wallet funded successfully - full amount credited",
       data: {
         user_id: userProfile.id,
         amount_credited: amountToCredit,
         new_balance: newBalance,
-        transaction_ref: `FLW-${flw_ref}`
+        transaction_ref: `FLW-${flw_ref}`,
+        note: "No service charges applied"
       }
     }), {
       status: 200,

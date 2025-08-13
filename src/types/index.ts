@@ -46,8 +46,8 @@ export interface Transaction {
   locationId?: string;
   credentialId?: string;
   amount: number;
-  type: 'wallet_topup' | 'plan_purchase';
-  status: 'pending' | 'completed' | 'failed';
+  type: 'wallet_topup' | 'plan_purchase' | 'wallet_funding';
+  status: 'pending' | 'completed' | 'failed' | 'success';
   mikrotikUsername?: string;
   mikrotikPassword?: string;
   expiresAt?: string;

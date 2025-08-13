@@ -27,6 +27,15 @@ ALTER TABLE transactions
 ADD CONSTRAINT transactions_type_check 
 CHECK (type IN ('wallet_topup', 'plan_purchase', 'wallet_funding'));
 
+-- Fix the status constraint to allow 'success' status
+-- First, drop the existing status constraint
+ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_status_check;
+
+-- Add the new status constraint with 'success' included
+ALTER TABLE transactions 
+ADD CONSTRAINT transactions_status_check 
+CHECK (status IN ('pending', 'completed', 'failed', 'success'));
+
 -- Add reference column if it doesn't exist
 ALTER TABLE transactions 
 ADD COLUMN IF NOT EXISTS reference TEXT;

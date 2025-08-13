@@ -8,11 +8,8 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log(`🔔 Webhook received: ${req.method} ${req.url}`);
-  
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
-    console.log("📋 Handling CORS preflight request");
     return new Response(null, {
       status: 204,
       headers: corsHeaders
@@ -20,13 +17,13 @@ serve(async (req) => {
   }
 
   try {
-    // Log all headers for debugging
-    console.log("📥 Request headers:", Object.fromEntries(req.headers.entries()));
-
+    console.log("Webhook started - processing request");
+    
     // Get Flutterwave secret key for verification
     const flutterwaveSecretKey = Deno.env.get("FLUTTERWAVE_SECRET_KEY");
+    console.log("Flutterwave secret key exists:", !!flutterwaveSecretKey);
+    
     if (!flutterwaveSecretKey) {
-      console.error("❌ Flutterwave secret key not configured");
       throw new Error("Flutterwave secret key not configured");
     }
 
@@ -34,72 +31,34 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
     
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error("❌ Supabase configuration missing");
-      throw new Error("Supabase configuration missing");
-    }
+    console.log("Supabase URL exists:", !!supabaseUrl);
+    console.log("Supabase service key exists:", !!supabaseServiceKey);
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    console.log("✅ Supabase client initialized");
+    console.log("Supabase client created successfully");
 
     // Get the signature from the request headers
     const signature = req.headers.get("verif-hash");
-    console.log("🔐 Webhook signature received:", signature ? "Yes" : "No");
+    console.log("Signature header:", signature);
     
-    // Parse webhook payload first to get the data
+    // Parse webhook payload
     let payload;
     try {
       const rawBody = await req.text();
-      console.log("📦 Raw webhook payload:", rawBody);
+      console.log("Raw body received, length:", rawBody.length);
       payload = JSON.parse(rawBody);
+      console.log("Payload parsed successfully");
     } catch (error) {
-      console.error("❌ Failed to parse webhook payload:", error);
+      console.error("JSON parse error:", error);
       throw new Error("Invalid JSON payload");
     }
 
-    // In production, verify the signature (uncomment for production)
-    /*
-    if (!signature) {
-      console.error("❌ Missing webhook signature");
-      return new Response(
-        JSON.stringify({ success: false, error: "Missing signature" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    // Verify signature matches Flutterwave's hash
-    const crypto = await import("node:crypto");
-    const hash = crypto.createHmac("sha256", flutterwaveSecretKey).update(JSON.stringify(payload)).digest("hex");
-    
-    if (hash !== signature) {
-      console.error("❌ Invalid webhook signature");
-      return new Response(
-        JSON.stringify({ success: false, error: "Invalid signature" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-    */
-
-    console.log("📋 Webhook payload processed:", {
-      event: payload.event,
-      payment_type: payload.data?.payment_type,
-      status: payload.data?.status,
-      tx_ref: payload.data?.tx_ref,
-      flw_ref: payload.data?.flw_ref
-    });
-
-    // Verify this is a charge.completed event for a bank transfer
+    // Quick validation - exit early if not a bank transfer
     if (payload.event !== "charge.completed" || 
         payload.data?.payment_type !== "bank_transfer" || 
         payload.data?.status !== "successful") {
       
-      console.log("ℹ️ Not a successful bank transfer event, ignoring");
+      console.log("Event ignored - not a successful bank transfer");
       return new Response(JSON.stringify({
         success: true,
         message: "Event ignored - not a successful bank transfer"
@@ -112,42 +71,29 @@ serve(async (req) => {
       });
     }
 
-    // Extract relevant data from the webhook
+    console.log("Processing bank transfer event");
+
+    // Extract data
     const { tx_ref, flw_ref, amount, currency, customer } = payload.data;
     const email = customer?.email;
 
+    console.log("Extracted data:", { tx_ref, flw_ref, amount, currency, email });
+
     if (!tx_ref || !flw_ref || !amount || !email) {
-      console.error("❌ Missing required fields in webhook data:", {
-        tx_ref: !!tx_ref,
-        flw_ref: !!flw_ref,
-        amount: !!amount,
-        email: !!email
-      });
       throw new Error("Missing required fields in webhook payload");
     }
 
-    console.log("💰 Processing transaction:", {
-      tx_ref,
-      flw_ref,
-      amount: parseFloat(amount),
-      currency,
-      email
-    });
-
-    // Check if this transaction has already been processed (idempotency)
-    const { data: existingTransaction, error: txCheckError } = await supabase
+    // FAST: Check if transaction already processed (idempotency)
+    console.log("Checking for existing transaction...");
+    const { data: existingTransaction } = await supabase
       .from("transactions")
-      .select("id, status")
+      .select("id")
       .eq("flutterwave_tx_ref", flw_ref)
       .eq("status", "success")
       .maybeSingle();
 
-    if (txCheckError) {
-      console.error("❌ Error checking for existing transaction:", txCheckError);
-    }
-
     if (existingTransaction) {
-      console.log("ℹ️ Transaction already processed:", flw_ref);
+      console.log("Transaction already processed");
       return new Response(JSON.stringify({
         success: true,
         message: "Transaction already processed"
@@ -160,86 +106,64 @@ serve(async (req) => {
       });
     }
 
-    // Find the user by the virtual account reference (tx_ref)
-    console.log("🔍 Looking up user by virtual_account_reference:", tx_ref);
-    
+    // FAST: Find user by virtual account reference or email
+    console.log("Finding user profile...");
+    let userProfile;
     const { data: profileData, error: userError } = await supabase
       .from("profiles")
-      .select("id, wallet_balance, email, first_name, last_name")
+      .select("id, wallet_balance, email")
       .eq("virtual_account_reference", tx_ref)
       .single();
 
-    let userProfile = profileData;
-
-    if (userError || !userProfile) {
-      console.log("⚠️ User not found by virtual_account_reference, trying email fallback");
-      
-      // Try to find by email as a fallback
+    if (userError || !profileData) {
+      console.log("User not found by virtual_account_reference, trying email...");
+      // Fallback to email lookup
       const { data: userByEmail, error: emailError } = await supabase
         .from("profiles")
-        .select("id, wallet_balance, email, first_name, last_name")
+        .select("id, wallet_balance, email")
         .eq("email", email)
         .single();
 
       if (emailError || !userByEmail) {
-        console.error("❌ User not found by either method:", {
-          virtualAccountError: userError?.message,
-          emailError: emailError?.message
-        });
+        console.error("User not found by email either");
         throw new Error(`User profile not found for tx_ref: ${tx_ref} or email: ${email}`);
       }
       
-      console.log("✅ User found by email fallback");
       userProfile = userByEmail;
+      console.log("User found by email");
+    } else {
+      userProfile = profileData;
+      console.log("User found by virtual_account_reference");
     }
 
-    // Verify the email matches (additional security check)
+    // Verify email match
     if (userProfile.email !== email) {
-      console.error("❌ Email mismatch:", {
-        profileEmail: userProfile.email,
-        webhookEmail: email
-      });
       throw new Error("Email mismatch in transaction");
     }
 
-    console.log("👤 User found:", {
-      id: userProfile.id,
-      email: userProfile.email,
-      currentBalance: userProfile.wallet_balance
-    });
-
-    // NO CHARGES - User receives full amount
+    // FAST: Calculate new balance (no charges)
     const originalAmount = parseFloat(amount);
-    const amountToCredit = originalAmount; // Full amount, no deductions
-
-    console.log("💰 No charges applied - user receives full amount:", {
-      originalAmount,
-      amountToCredit
-    });
-
-    // Update user's wallet balance
     const currentBalance = parseFloat(userProfile.wallet_balance || '0');
-    const newBalance = currentBalance + amountToCredit;
-    
-    console.log("💼 Updating wallet balance:", {
-      previous: currentBalance,
-      adding: amountToCredit,
-      new: newBalance
-    });
+    const newBalance = currentBalance + originalAmount;
 
+    console.log("Balance calculation:", { currentBalance, originalAmount, newBalance });
+
+    // FAST: Update wallet balance
+    console.log("Updating wallet balance...");
     const { error: updateError } = await supabase
       .from("profiles")
       .update({ wallet_balance: newBalance })
       .eq("id", userProfile.id);
 
     if (updateError) {
-      console.error("❌ Error updating wallet balance:", updateError);
+      console.error("Wallet update error:", updateError);
       throw new Error("Failed to update wallet balance");
     }
 
-    console.log("✅ Wallet balance updated successfully");
+    console.log("Wallet balance updated successfully");
 
-    // Create a transaction record
+    // FAST: Create transaction record
+    console.log("Creating transaction record...");
     const transactionData = {
       user_id: userProfile.id,
       type: "wallet_funding",
@@ -251,54 +175,54 @@ serve(async (req) => {
         payment_method: "bank_transfer",
         currency,
         tx_ref,
-        flutterwave_data: payload.data,
-        service_charge: null, // No charges
         note: "Full amount credited - no service charges"
       }
     };
 
-    console.log("📝 Creating transaction record");
     const { error: transactionError } = await supabase
       .from("transactions")
       .insert([transactionData]);
 
     if (transactionError) {
-      console.error("❌ Error creating transaction record:", transactionError);
+      console.error("Transaction creation error:", transactionError);
       throw new Error("Failed to create transaction record");
     }
 
-    console.log("✅ Transaction record created successfully");
+    console.log("Transaction record created successfully");
 
-    // Log the successful wallet funding
-    console.log("📊 Creating admin log");
-    await supabase.from("admin_logs").insert([
-      {
-        admin_id: null,
-        action: "wallet_funding_webhook",
-        details: {
-          user_id: userProfile.id,
-          user_email: userProfile.email,
-          amount: originalAmount,
-          tx_ref,
-          flw_ref,
-          previous_balance: currentBalance,
-          new_balance: newBalance,
-          service_charge: null, // No charges
-          note: "Full amount credited - no service charges",
-          timestamp: new Date().toISOString()
+    // FAST: Create admin log (non-blocking)
+    console.log("Creating admin log...");
+    try {
+      await supabase.from("admin_logs").insert([
+        {
+          admin_id: null,
+          action: "wallet_funding_webhook",
+          details: {
+            user_id: userProfile.id,
+            amount: originalAmount,
+            tx_ref,
+            flw_ref,
+            previous_balance: currentBalance,
+            new_balance: newBalance,
+            note: "Full amount credited - no service charges"
+          }
         }
-      }
-    ]);
+      ]);
+      console.log("Admin log created successfully");
+    } catch (logError) {
+      // Log error but don't fail the webhook
+      console.error("Admin log creation failed:", logError);
+    }
 
-    console.log("🎉 Webhook processing completed successfully");
+    console.log("Webhook completed successfully");
 
-    // Return success response
+    // Return success response immediately
     return new Response(JSON.stringify({
       success: true,
       message: "Wallet funded successfully - full amount credited",
       data: {
         user_id: userProfile.id,
-        amount_credited: amountToCredit,
+        amount_credited: originalAmount,
         new_balance: newBalance,
         transaction_ref: `FLW-${flw_ref}`,
         note: "No service charges applied"
@@ -312,18 +236,10 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("💥 Webhook processing error:", error);
-    
-    // Log error for debugging
-    console.error("Error details:", {
-      message: error.message,
-      stack: error.stack
-    });
-
+    console.error("Webhook error:", error);
     return new Response(JSON.stringify({
       success: false,
-      error: error.message || "Failed to process webhook",
-      timestamp: new Date().toISOString()
+      error: error.message || "Failed to process webhook"
     }), {
       status: 500,
       headers: {

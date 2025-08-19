@@ -6,12 +6,16 @@ import { UserDashboard } from './components/user/UserDashboard';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 
 function AppContent() {
-  const { user, isAdmin, loading } = useAuth();
+  const { user, isAdmin, loading, shouldShowLogin } = useAuth();
 
-  if (loading) {
+  // Show login page immediately if auth check is taking too long
+  if (loading && !shouldShowLogin) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-400 via-blue-500 to-green-400 flex items-center justify-center">
-        <div className="text-white text-xl">Loading...</div>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
+          <div className="text-white text-xl">Loading StarNetX...</div>
+        </div>
       </div>
     );
   }

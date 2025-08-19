@@ -8,11 +8,16 @@ interface AuthContextType {
   authUser: AuthUser | null;
   isAdmin: boolean;
   loading: boolean;
+  profileLoading: boolean;
+  initialAuthCheck: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   adminLogin: (email: string, password: string) => Promise<boolean>;
   register: (email: string, password: string, phone?: string, referredBy?: string) => Promise<boolean>;
   logout: () => Promise<void>;
   updateWalletBalance: (amount: number) => Promise<void>;
+  refreshProfile: () => void;
+  refreshSession: () => Promise<void>;
+  shouldShowLogin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -22,63 +27,91 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [initialAuthCheck, setInitialAuthCheck] = useState(false);
 
   useEffect(() => {
-    // Get initial session
+    let mounted = true;
+
+    // Get initial session with fast fallback
     const getInitialSession = async () => {
       try {
+        // Set a fast timeout to show login page if auth check takes too long
+        const fastTimeout = setTimeout(() => {
+          if (mounted && !initialAuthCheck) {
+            console.log('Fast timeout reached, showing login page');
+            setLoading(false);
+            setInitialAuthCheck(true);
+          }
+        }, 500); // Show login page after 500ms if auth check is slow
+
         const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (!mounted) return;
+        
+        clearTimeout(fastTimeout);
         
         if (error) {
           console.error('Error getting session:', error);
           setLoading(false);
+          setInitialAuthCheck(true);
           return;
         }
 
         if (session?.user) {
           setAuthUser(session.user);
-          // Do not block UI on profile fetch
-          fetchUserProfile(session.user.id).catch((err) => {
-            console.error('Error in fetchUserProfile (init):', err);
-          });
+          // Fetch profile with timeout protection
+          await fetchUserProfileWithTimeout(session.user.id);
+        } else {
+          setLoading(false);
+          setInitialAuthCheck(true);
         }
       } catch (error) {
         console.error('Error in getInitialSession:', error);
-      } finally {
-        // Always unlock UI; profile fetching continues in background
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+          setInitialAuthCheck(true);
+        }
       }
     };
 
-    getInitialSession();
-
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       try {
+        if (!mounted) return;
+
         if (session?.user) {
           setAuthUser(session.user);
-          // Non-blocking profile fetch
-          fetchUserProfile(session.user.id).catch((err) => {
-            console.error('Error in fetchUserProfile (auth change):', err);
-          });
+          // Fetch profile with timeout protection
+          // Do not block or force logout if this times out
+          void fetchUserProfileWithTimeout(session.user.id);
         } else {
           setAuthUser(null);
           setUser(null);
           setIsAdmin(false);
+          setLoading(false);
+          setInitialAuthCheck(true);
         }
       } catch (error) {
         console.error('Error in auth state change:', error);
-      } finally {
-        // Ensure UI is not locked by auth changes
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+          setInitialAuthCheck(true);
+        }
       }
     });
 
-    return () => subscription.unsubscribe();
+    getInitialSession();
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const fetchUserProfile = async (userId: string) => {
     try {
+      setProfileLoading(true);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -112,6 +145,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const fetchUserProfileWithTimeout = async (userId: string) => {
+    try {
+      setProfileLoading(true);
+      
+      // Create a promise that rejects after 10 seconds
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 10000);
+      });
+
+      // Race between profile fetch and timeout
+      await Promise.race([
+        fetchUserProfile(userId),
+        timeoutPromise
+      ]);
+    } catch (error) {
+      console.warn('Profile fetch failed or timed out (will not logout):', error);
+      // Do NOT clear user or force logout; allow UI to continue and retry later
+    } finally {
+      setLoading(false);
+      setProfileLoading(false);
     }
   };
 
@@ -205,10 +263,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
-        setAuthUser(data.user);
+        const user = data.user;
+        setAuthUser(user);
         // Profile will be created by the trigger, so we wait and then fetch it
         setTimeout(async () => {
-          await fetchUserProfile(data.user.id);
+          await fetchUserProfile(user.id);
         }, 1000);
         return true;
       }
@@ -262,17 +321,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const refreshSession = async (): Promise<void> => {
+    try {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error) {
+        console.error('Session refresh failed:', error);
+        // Check current session; only logout if no session exists
+        const { data: current } = await supabase.auth.getSession();
+        if (!current.session) {
+          await logout();
+        }
+        return;
+      }
+      if (data.session?.user) {
+        // Update auth user and fetch profile in background
+        setAuthUser(data.session.user);
+        void fetchUserProfileWithTimeout(data.session.user.id);
+      }
+    } catch (error) {
+      console.error('Session refresh error:', error);
+      // Soft-fail: do not immediately logout; check session first
+      const { data: current } = await supabase.auth.getSession();
+      if (!current.session) {
+        await logout();
+      }
+    }
+  };
+
+  // Check if we should show login page immediately
+  const shouldShowLogin = !loading || initialAuthCheck;
+
   return (
     <AuthContext.Provider value={{
       user,
       authUser,
       isAdmin,
       loading,
+      profileLoading,
+      initialAuthCheck,
       login,
       adminLogin,
       register,
       logout,
       updateWalletBalance,
+      refreshProfile: () => user && fetchUserProfile(user.id),
+      refreshSession,
+      shouldShowLogin,
     }}>
       {children}
     </AuthContext.Provider>

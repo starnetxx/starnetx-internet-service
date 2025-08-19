@@ -11,7 +11,7 @@ interface UsageCardProps {
 }
 
 export const UsageCard: React.FC<UsageCardProps> = ({ purchase }) => {
-  const { plans, locations, activatePurchase } = useData();
+  const { plans, locations, activatePurchase, isPurchaseInProgress } = useData();
   const { user } = useAuth();
   
   const plan = plans.find(p => p.id === purchase.planId);
@@ -82,9 +82,14 @@ export const UsageCard: React.FC<UsageCardProps> = ({ purchase }) => {
         
         <Button 
           onClick={handleActivatePlan}
-          className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-semibold"
+          disabled={isPurchaseInProgress}
+          className={`w-full py-3 rounded-xl font-semibold ${
+            isPurchaseInProgress 
+              ? 'bg-gray-400 cursor-not-allowed' 
+              : 'bg-green-600 hover:bg-green-700'
+          } text-white`}
         >
-          Start Plan ({plan.duration})
+          {isPurchaseInProgress ? 'Purchase in Progress...' : `Start Plan (${plan.duration})`}
         </Button>
       </Card>
     );

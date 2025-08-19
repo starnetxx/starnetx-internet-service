@@ -177,7 +177,7 @@ export const ReferralPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 min-h-[calc(100vh-400px)] max-[380px]:min-h-[calc(100vh-350px)] max-[360px]:min-h-[calc(100vh-320px)] max-[350px]:min-h-[calc(100vh-300px)]">
       {/* Hero Section */}
       <div className="text-center space-y-4">
         <div className="relative inline-block">
@@ -380,8 +380,8 @@ export const ReferralPage: React.FC = () => {
         </div>
       </div>
       
-      {/* Safe Area Spacer for Bottom Navigation */}
-      <div className="h-20"></div>
+      {/* Consistent bottom spacing */}
+      <div className="h-8"></div>
     </div>
   );
 };

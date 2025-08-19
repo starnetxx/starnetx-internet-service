@@ -17,6 +17,45 @@ interface AuthContextType {
   updateWalletBalance: (amount: number) => Promise<void>;
   refreshProfile: () => void;
   refreshSession: () => Promise<void>;
+  retryProfileFetch: () => Promise<void>;
+  retryProfileFetchWithBackoff: (maxRetries?: number) => Promise<void>;
+  checkSupabaseConnection: () => Promise<boolean>;
+  validateSupabaseConfig: () => boolean;
+  getErrorMessage: (error: any) => string;
+  getDetailedErrorInfo: (error: any) => {
+    message: string;
+    code: string;
+    details: string;
+    hint: string;
+    userFriendlyMessage: string;
+    suggestedAction: string;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+  };
+  createMinimalUserProfile: (authUser: AuthUser) => User;
+  isUserDegraded: () => boolean;
+  recoverUserProfile: () => Promise<boolean>;
+  getProfileFetchStatus: () => {
+    hasUser: boolean;
+    hasAuthUser: boolean;
+    isDegraded: boolean;
+    profileLoading: boolean;
+    loading: boolean;
+    initialAuthCheck: boolean;
+    connectionOk: boolean | null;
+    lastError: string | null;
+  };
+  diagnoseProfileIssue: () => Promise<string>;
+  forceProfileRecovery: () => Promise<{ success: boolean; message: string }>;
+  getAuthStateSummary: () => {
+    timestamp: string;
+    authUser: any;
+    user: any;
+    loading: boolean;
+    profileLoading: boolean;
+    initialAuthCheck: boolean;
+    isAdmin: boolean;
+    connectionStatus: 'unknown' | 'checking' | 'ok' | 'failed';
+  };
   shouldShowLogin: boolean;
 }
 
@@ -33,6 +72,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let mounted = true;
 
+    // Validate Supabase configuration first
+    const configValid = validateSupabaseConfig();
+    if (!configValid) {
+      console.error('Supabase configuration is invalid, auth will likely fail');
+    }
+
     // Get initial session with fast fallback
     const getInitialSession = async () => {
       try {
@@ -43,7 +88,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setLoading(false);
             setInitialAuthCheck(true);
           }
-        }, 500); // Show login page after 500ms if auth check is slow
+        }, 1000); // Increased from 500ms to 1000ms for better reliability
+
+        // Check Supabase connection first
+        const connectionOk = await checkSupabaseConnection();
+        if (!connectionOk) {
+          console.warn('Supabase connection check failed, proceeding with auth check anyway');
+        }
 
         const { data: { session }, error } = await supabase.auth.getSession();
         
@@ -60,8 +111,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (session?.user) {
           setAuthUser(session.user);
-          // Fetch profile with timeout protection
-          await fetchUserProfileWithTimeout(session.user.id);
+          // Fetch profile with timeout protection and retry
+          try {
+            await fetchUserProfileWithTimeout(session.user.id);
+          } catch (profileError) {
+            console.warn('Initial profile fetch failed, but continuing with auth:', profileError);
+            // Create minimal profile as fallback
+            const minimalProfile = createMinimalUserProfile(session.user);
+            setUser(minimalProfile);
+            setIsAdmin(false);
+            setLoading(false);
+            setInitialAuthCheck(true);
+          }
         } else {
           setLoading(false);
           setInitialAuthCheck(true);
@@ -82,9 +143,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (session?.user) {
           setAuthUser(session.user);
-          // Fetch profile with timeout protection
+          // Fetch profile with timeout protection and retry
           // Do not block or force logout if this times out
-          void fetchUserProfileWithTimeout(session.user.id);
+          try {
+            await fetchUserProfileWithTimeout(session.user.id);
+          } catch (profileError) {
+            console.warn('Auth state change profile fetch failed, but continuing:', profileError);
+            // Create minimal profile as fallback
+            const minimalProfile = createMinimalUserProfile(session.user);
+            setUser(minimalProfile);
+            setIsAdmin(false);
+            setLoading(false);
+            setInitialAuthCheck(true);
+          }
         } else {
           setAuthUser(null);
           setUser(null);
@@ -109,21 +180,91 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const fetchUserProfile = async (userId: string) => {
+  // Add network status monitoring
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log('Network connection restored, attempting to recover profile...');
+      if (authUser?.id && isUserDegraded()) {
+        // Wait a bit for the connection to stabilize
+        setTimeout(() => {
+          void recoverUserProfile();
+        }, 2000);
+      }
+    };
+
+    const handleOffline = () => {
+      console.log('Network connection lost');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [authUser?.id, user]);
+
+  // Add periodic connection health check
+  useEffect(() => {
+    if (!authUser?.id || !isUserDegraded()) return;
+    
+    const interval = setInterval(async () => {
+      try {
+        console.log('Performing periodic connection health check...');
+        const connectionOk = await checkSupabaseConnection();
+        
+        if (connectionOk && isUserDegraded()) {
+          console.log('Connection healthy, attempting profile recovery...');
+          await recoverUserProfile();
+        }
+      } catch (error) {
+        console.warn('Periodic connection health check failed:', error);
+      }
+    }, 30000); // Check every 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [authUser?.id, user]);
+
+  const fetchUserProfile = async (userId: string, retryCount = 0) => {
     try {
+      console.log(`Fetching profile for user ${userId} (attempt ${retryCount + 1})`);
       setProfileLoading(true);
+      
+      const startTime = Date.now();
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
+      const endTime = Date.now();
+      
+      console.log(`Profile fetch completed in ${endTime - startTime}ms`);
 
       if (error) {
         console.error('Error fetching user profile:', error);
+        
+        // Check if it's a permission or table access issue
+        if (error.code === 'PGRST116') {
+          console.error('Permission denied - user may not have access to profiles table');
+        } else if (error.code === '42P01') {
+          console.error('Table does not exist - profiles table missing');
+        } else if (error.code === 'PGRST301') {
+          console.error('Row not found - user profile may not exist');
+        }
+        
+        // Retry up to 2 times with exponential backoff
+        if (retryCount < 2) {
+          console.log(`Retrying profile fetch (attempt ${retryCount + 1})...`);
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+          return fetchUserProfile(userId, retryCount + 1);
+        }
+        
         return;
       }
 
       if (data) {
+        console.log('Profile data received:', { id: data.id, email: data.email, role: data.role });
         const userProfile: User = {
           id: data.id,
           email: data.email,
@@ -142,9 +283,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
         setUser(userProfile);
         setIsAdmin(data.role === 'admin');
+        console.log('Profile set successfully');
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);
+      
+      // Retry up to 2 times with exponential backoff
+      if (retryCount < 2) {
+        console.log(`Retrying profile fetch due to error (attempt ${retryCount + 1})...`);
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+        return fetchUserProfile(userId, retryCount + 1);
+      }
     } finally {
       setProfileLoading(false);
     }
@@ -154,9 +303,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setProfileLoading(true);
       
-      // Create a promise that rejects after 10 seconds
+      // Check connection health first
+      try {
+        const { data: healthCheck } = await supabase
+          .from('profiles')
+          .select('id')
+          .limit(1);
+        console.log('Connection health check passed');
+      } catch (healthError) {
+        console.warn('Connection health check failed:', healthError);
+      }
+      
+      // Create a promise that rejects after 15 seconds (increased from 10)
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 10000);
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 15000);
       });
 
       // Race between profile fetch and timeout
@@ -166,11 +326,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ]);
     } catch (error) {
       console.warn('Profile fetch failed or timed out (will not logout):', error);
-      // Do NOT clear user or force logout; allow UI to continue and retry later
+      
+      // Try to fetch profile again without timeout as a fallback
+      try {
+        console.log('Attempting fallback profile fetch...');
+        await fetchUserProfile(userId);
+      } catch (fallbackError) {
+        console.warn('Fallback profile fetch also failed:', fallbackError);
+        
+        // Create minimal profile as last resort
+        if (authUser) {
+          console.log('Creating minimal user profile as fallback');
+          const minimalProfile = createMinimalUserProfile(authUser);
+          setUser(minimalProfile);
+          setIsAdmin(false);
+        }
+      }
     } finally {
       setLoading(false);
       setProfileLoading(false);
     }
+  };
+
+  const createMinimalUserProfile = (authUser: AuthUser): User => {
+    return {
+      id: authUser.id,
+      email: authUser.email || '',
+      phone: undefined,
+      walletBalance: 0,
+      referralCode: '',
+      referredBy: undefined,
+      role: 'user',
+      virtualAccountBankName: undefined,
+      virtualAccountNumber: undefined,
+      virtualAccountReference: undefined,
+      bvn: undefined,
+      createdAt: authUser.created_at || new Date().toISOString(),
+      firstName: undefined,
+      lastName: undefined,
+    };
   };
 
   const generateReferralCode = () => {
@@ -191,7 +385,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (data.user) {
         setAuthUser(data.user);
+        try {
         await fetchUserProfile(data.user.id);
+        } catch (profileError) {
+          console.warn('Profile fetch failed during login, but login succeeded:', profileError);
+          // Create minimal profile as fallback
+          const minimalProfile = createMinimalUserProfile(data.user);
+          setUser(minimalProfile);
+          setIsAdmin(false);
+        }
         return true;
       }
 
@@ -348,8 +550,305 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const retryProfileFetch = async (): Promise<void> => {
+    if (authUser?.id) {
+      try {
+        await fetchUserProfileWithTimeout(authUser.id);
+      } catch (error) {
+        console.warn('Retry profile fetch failed:', error);
+      }
+    }
+  };
+
+  const retryProfileFetchWithBackoff = async (maxRetries = 3): Promise<void> => {
+    if (!authUser?.id) return;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Profile fetch retry attempt ${attempt}/${maxRetries}`);
+        await fetchUserProfile(authUser.id);
+        console.log('Profile fetch retry successful');
+        return;
+      } catch (error) {
+        console.warn(`Profile fetch retry attempt ${attempt} failed:`, error);
+        
+        if (attempt === maxRetries) {
+          console.error('All profile fetch retries failed, creating minimal profile');
+          const minimalProfile = createMinimalUserProfile(authUser);
+          setUser(minimalProfile);
+          setIsAdmin(false);
+          return;
+        }
+        
+        // Exponential backoff: wait 2^attempt seconds before next retry
+        const delay = Math.pow(2, attempt) * 1000;
+        console.log(`Waiting ${delay}ms before next retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  };
+
+  const checkSupabaseConnection = async (): Promise<boolean> => {
+    try {
+      const startTime = Date.now();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .limit(1);
+      const endTime = Date.now();
+      
+      if (error) {
+        console.error('Supabase connection check failed:', error);
+        return false;
+      }
+      
+      console.log(`Supabase connection check passed in ${endTime - startTime}ms`);
+      return true;
+    } catch (error) {
+      console.error('Supabase connection check error:', error);
+      return false;
+    }
+  };
+
+  const validateSupabaseConfig = (): boolean => {
+    const url = import.meta.env.VITE_SUPABASE_URL;
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    
+    if (!url || !key) {
+      console.error('Missing Supabase environment variables:', { 
+        hasUrl: !!url, 
+        hasKey: !!key,
+        urlLength: url?.length || 0,
+        keyLength: key?.length || 0
+      });
+      return false;
+    }
+    
+    if (!url.includes('supabase.co')) {
+      console.warn('Supabase URL format may be incorrect:', url);
+    }
+    
+    console.log('Supabase configuration validated');
+    return true;
+  };
+
+  const getErrorMessage = (error: any): string => {
+    if (error?.code === 'PGRST116') {
+      return 'Permission denied - please contact support';
+    } else if (error?.code === '42P01') {
+      return 'System configuration error - please contact support';
+    } else if (error?.code === 'PGRST301') {
+      return 'User profile not found - please contact support';
+    } else if (error?.message?.includes('timeout')) {
+      return 'Connection timeout - please check your internet connection and try again';
+    } else if (error?.message?.includes('fetch')) {
+      return 'Network error - please check your internet connection and try again';
+    } else {
+      return 'An unexpected error occurred - please try again';
+    }
+  };
+
+  const getDetailedErrorInfo = (error: any) => {
+    const baseInfo = {
+      message: error?.message || 'Unknown error',
+      code: error?.code || 'NO_CODE',
+      details: error?.details || 'No details available',
+      hint: error?.hint || 'No hint available',
+    };
+    
+    // Add specific error context
+    if (error?.code === 'PGRST116') {
+      return {
+        ...baseInfo,
+        userFriendlyMessage: 'Access denied - your account may not have the necessary permissions',
+        suggestedAction: 'Please contact support to verify your account permissions',
+        severity: 'high' as const,
+      };
+    } else if (error?.code === '42P01') {
+      return {
+        ...baseInfo,
+        userFriendlyMessage: 'System configuration error - required database table is missing',
+        suggestedAction: 'This is a system issue - please contact support immediately',
+        severity: 'critical' as const,
+      };
+    } else if (error?.code === 'PGRST301') {
+      return {
+        ...baseInfo,
+        userFriendlyMessage: 'User profile not found in the system',
+        suggestedAction: 'Please contact support to create your user profile',
+        severity: 'medium' as const,
+      };
+    } else if (error?.message?.includes('timeout')) {
+      return {
+        ...baseInfo,
+        userFriendlyMessage: 'Request timed out - the server is taking too long to respond',
+        suggestedAction: 'Please check your internet connection and try again',
+        severity: 'medium' as const,
+      };
+    } else if (error?.message?.includes('fetch')) {
+      return {
+        ...baseInfo,
+        userFriendlyMessage: 'Network error - unable to connect to the server',
+        suggestedAction: 'Please check your internet connection and try again',
+        severity: 'medium' as const,
+      };
+    } else {
+      return {
+        ...baseInfo,
+        userFriendlyMessage: 'An unexpected error occurred',
+        suggestedAction: 'Please try again or contact support if the problem persists',
+        severity: 'low' as const,
+      };
+    }
+  };
+
   // Check if we should show login page immediately
   const shouldShowLogin = !loading || initialAuthCheck;
+
+  const isUserDegraded = (): boolean => {
+    // User is considered degraded if they have a minimal profile (no referral code, default values)
+    return user !== null && (
+      user.referralCode === '' ||
+      user.walletBalance === 0 ||
+      !user.phone ||
+      !user.firstName ||
+      !user.lastName
+    );
+  };
+
+  const recoverUserProfile = async (): Promise<boolean> => {
+    if (!authUser?.id) return false;
+    
+    try {
+      console.log('Attempting to recover user profile...');
+      await fetchUserProfile(authUser.id);
+      
+      // Check if recovery was successful
+      if (user && !isUserDegraded()) {
+        console.log('User profile recovery successful');
+        return true;
+      } else {
+        console.warn('User profile recovery failed - still using minimal profile');
+        return false;
+      }
+    } catch (error) {
+      console.error('User profile recovery failed:', error);
+      return false;
+    }
+  };
+
+  const getProfileFetchStatus = () => {
+    return {
+      hasUser: !!user,
+      hasAuthUser: !!authUser,
+      isDegraded: isUserDegraded(),
+      profileLoading,
+      loading,
+      initialAuthCheck,
+      connectionOk: null as boolean | null,
+      lastError: null as string | null,
+    };
+  };
+
+  const diagnoseProfileIssue = async (): Promise<string> => {
+    try {
+      // Check Supabase connection
+      const connectionOk = await checkSupabaseConnection();
+      
+      if (!connectionOk) {
+        return 'Supabase connection failed - check your internet connection and try again';
+      }
+      
+      if (!authUser?.id) {
+        return 'No authenticated user found - please log in again';
+      }
+      
+      // Try to fetch profile with detailed error
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', authUser.id)
+          .single();
+          
+        if (error) {
+          if (error.code === 'PGRST116') {
+            return 'Permission denied - your account may not have access to the profiles table';
+          } else if (error.code === '42P01') {
+            return 'System configuration error - profiles table is missing';
+          } else if (error.code === 'PGRST301') {
+            return 'User profile not found - please contact support to create your profile';
+          } else {
+            return `Database error: ${error.message}`;
+          }
+        }
+        
+        if (!data) {
+          return 'Profile exists but no data returned - this may be a system issue';
+        }
+        
+        return 'Profile fetch successful - no issues detected';
+      } catch (fetchError: any) {
+        return `Profile fetch error: ${fetchError.message || 'Unknown error'}`;
+      }
+    } catch (error: any) {
+      return `Diagnosis failed: ${error.message || 'Unknown error'}`;
+    }
+  };
+
+  const forceProfileRecovery = async (): Promise<{ success: boolean; message: string }> => {
+    if (!authUser?.id) {
+      return { success: false, message: 'No authenticated user found' };
+    }
+    
+    try {
+      console.log('Force profile recovery initiated...');
+      
+      // First check connection
+      const connectionOk = await checkSupabaseConnection();
+      if (!connectionOk) {
+        return { success: false, message: 'Cannot connect to server - check your internet connection' };
+      }
+      
+      // Try to fetch profile with multiple retries
+      await retryProfileFetchWithBackoff(5);
+      
+      // Check if recovery was successful
+      if (user && !isUserDegraded()) {
+        return { success: true, message: 'Profile recovered successfully!' };
+      } else {
+        return { success: false, message: 'Profile recovery failed - please contact support' };
+      }
+    } catch (error: any) {
+      console.error('Force profile recovery failed:', error);
+      return { success: false, message: `Recovery failed: ${error.message || 'Unknown error'}` };
+    }
+  };
+
+  const getAuthStateSummary = () => {
+    return {
+      timestamp: new Date().toISOString(),
+      authUser: authUser ? {
+        id: authUser.id,
+        email: authUser.email,
+        createdAt: authUser.created_at,
+        lastSignIn: authUser.last_sign_in_at,
+      } : null,
+      user: user ? {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        isDegraded: isUserDegraded(),
+        hasWalletBalance: user.walletBalance > 0,
+        hasReferralCode: !!user.referralCode,
+      } : null,
+      loading,
+      profileLoading,
+      initialAuthCheck,
+      isAdmin,
+      connectionStatus: 'unknown' as 'unknown' | 'checking' | 'ok' | 'failed',
+    };
+  };
 
   return (
     <AuthContext.Provider value={{
@@ -366,7 +865,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updateWalletBalance,
       refreshProfile: () => user && fetchUserProfile(user.id),
       refreshSession,
+      retryProfileFetch,
+      retryProfileFetchWithBackoff,
+      checkSupabaseConnection,
+      validateSupabaseConfig,
+      getErrorMessage,
+      getDetailedErrorInfo,
+      createMinimalUserProfile,
+      isUserDegraded,
+      recoverUserProfile,
       shouldShowLogin,
+      getProfileFetchStatus,
+      diagnoseProfileIssue,
+      forceProfileRecovery,
+      getAuthStateSummary,
     }}>
       {children}
     </AuthContext.Provider>

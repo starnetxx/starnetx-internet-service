@@ -48,9 +48,6 @@ export const UserDashboard: React.FC = () => {
             <WalletCard onTopUpClick={() => setActivePage('virtual-account')} />
             <RecentTransactions onNavigateToHistory={() => setActivePage('settings')} />
             <PlansList onSeeAllClick={() => setActivePage('plans')} />
-            
-            {/* Safe Area Spacer for Bottom Navigation */}
-            <div className="h-20"></div>
           </div>
         );
       case 'plans':
@@ -140,9 +137,11 @@ export const UserDashboard: React.FC = () => {
           )}
         </div>
         
-        <main className="pb-40">
+        <main className="pb-40 min-h-[calc(100vh-200px)] max-[380px]:pb-36 max-[360px]:pb-32 max-[350px]:pb-28">
           <div className="px-4 -mt-6 relative">
-            {renderContent()}
+            <div className="min-h-[calc(100vh-300px)] max-[380px]:min-h-[calc(100vh-280px)] max-[360px]:min-h-[calc(100vh-260px)] max-[350px]:min-h-[calc(100vh-240px)]">
+              {renderContent()}
+            </div>
           </div>
         </main>
         <BottomNavigation activePage={activePage} onPageChange={setActivePage} />

@@ -45,7 +45,7 @@ export const WalletCard: React.FC<WalletCardProps> = ({ onTopUpClick }) => {
           </div>
           <div>
             <p className="text-gray-600 text-sm font-medium mb-2">Balance</p>
-            <p className="text-3xl font-black text-gray-900 tracking-tight drop-shadow-sm">
+            <p className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight drop-shadow-sm max-[400px]:text-xl">
               ₦ {user?.walletBalance?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
             </p>
           </div>
@@ -53,11 +53,10 @@ export const WalletCard: React.FC<WalletCardProps> = ({ onTopUpClick }) => {
         
         <Button
           onClick={onTopUpClick}
-          className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white px-6 py-3 rounded-2xl text-sm font-bold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 border border-white/20"
+          className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white px-4 py-3 rounded-2xl text-sm font-bold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 border border-white/20 max-[400px]:px-3 max-[400px]:py-2"
         >
-          <TrendingUp className="w-4 h-4 mr-2" />
-          <span className="hidden sm:inline">Top Up</span>
-          <span className="sm:hidden">+</span>
+          <TrendingUp className="w-4 h-4 mr-2 max-[400px]:w-3 max-[400px]:h-3 max-[400px]:mr-1" />
+          <span className="text-sm font-bold sm:text-sm max-[400px]:text-xs">Top Up +</span>
         </Button>
       </div>
       

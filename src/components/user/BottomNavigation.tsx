@@ -20,10 +20,10 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
   ];
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-40">
-      <div className="w-[92%] mx-auto">
+    <div className="fixed bottom-4 left-4 right-4 z-50 pointer-events-none transform-gpu max-[380px]:bottom-3 max-[360px]:bottom-2 max-[350px]:bottom-1">
+      <div className="w-[92%] mx-auto pointer-events-auto max-[380px]:w-[94%] max-[360px]:w-[96%] max-[350px]:w-[98%]">
         {/* Main Navigation Container */}
-        <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-100/50 px-3 py-4 relative">
+        <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-100/50 px-3 py-4 relative will-change-transform max-[380px]:px-2 max-[360px]:px-2 max-[350px]:px-1">
           {/* Navigation Items */}
           <div className="flex">
             {navItems.map((item) => {

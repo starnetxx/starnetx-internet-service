@@ -75,7 +75,7 @@ export const PlansList: React.FC<PlansListProps> = ({ showAll = false, onSeeAllC
   };
 
   return (
-    <div>
+    <div className="min-h-[calc(100vh-400px)] max-[380px]:min-h-[calc(100vh-350px)] max-[360px]:min-h-[calc(100vh-320px)] max-[350px]:min-h-[calc(100vh-300px)]">
       {/* Hero Section */}
       <div className="text-center space-y-4 mb-8">
         <div className="relative inline-block">
@@ -282,8 +282,8 @@ export const PlansList: React.FC<PlansListProps> = ({ showAll = false, onSeeAllC
         />
       )}
       
-      {/* Safe Area Spacer for Bottom Navigation (only when showing all plans) */}
-      {showAll && <div className="h-20"></div>}
+      {/* Consistent bottom spacing */}
+      <div className="h-8"></div>
     </div>
   );
 };

@@ -379,6 +379,9 @@ export const ReferralPage: React.FC = () => {
           </div>
         </div>
       </div>
+      
+      {/* Safe Area Spacer for Bottom Navigation */}
+      <div className="h-20"></div>
     </div>
   );
 };

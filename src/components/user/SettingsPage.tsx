@@ -296,6 +296,9 @@ export const SettingsPage: React.FC = () => {
         </Button>
       </div>
       
+      {/* Safe Area Spacer for Bottom Navigation */}
+      <div className="h-20"></div>
+      
       {/* Purchase Receipt Modal */}
       {selectedPurchase && (
         <PurchaseReceiptModal

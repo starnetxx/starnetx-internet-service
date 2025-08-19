@@ -1,0 +1,10 @@
+warning: in the working copy of 'src/components/user/BottomNavigation.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/user/PlansList.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/user/ReferralPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/user/SettingsPage.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/user/UserDashboard.tsx', LF will be replaced by CRLF the next time Git touches it
+src/components/user/BottomNavigation.tsx
+src/components/user/PlansList.tsx
+src/components/user/ReferralPage.tsx
+src/components/user/SettingsPage.tsx
+src/components/user/UserDashboard.tsx

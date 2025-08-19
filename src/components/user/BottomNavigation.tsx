@@ -20,7 +20,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
   ];
 
   return (
-    <div className="fixed bottom-6 left-4 right-4 z-40">
+    <div className="fixed bottom-4 left-4 right-4 z-40">
       <div className="w-[92%] mx-auto">
         {/* Main Navigation Container */}
         <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl border border-gray-100/50 px-3 py-4 relative">

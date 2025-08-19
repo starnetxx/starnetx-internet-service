@@ -281,6 +281,9 @@ export const PlansList: React.FC<PlansListProps> = ({ showAll = false, onSeeAllC
           onClose={() => setSelectedPlan(null)}
         />
       )}
+      
+      {/* Safe Area Spacer for Bottom Navigation (only when showing all plans) */}
+      {showAll && <div className="h-20"></div>}
     </div>
   );
 };

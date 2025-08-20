@@ -119,7 +119,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .from('plans')
         .select('*')
         .eq('is_active', true)
-        .order('price', { ascending: true });
+        .order('order', { ascending: true })
+        .order('price', { ascending: true }); // Fallback sorting by price if order is null
 
       if (error) {
         console.error('Error loading plans:', error);
@@ -142,6 +143,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         popular: plan.popular,
         isUnlimited: plan.is_unlimited,
         isActive: plan.is_active,
+        order: plan.order || 0, // Default to 0 if order is null
         createdAt: plan.created_at,
         updatedAt: plan.updated_at,
       }));
@@ -320,6 +322,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           popular: planData.popular || false,
           is_unlimited: planData.isUnlimited || false,
           is_active: planData.isActive !== false, // Default to true
+          order: plans.length, // Add new plans at the end
         })
         .select()
         .single();
@@ -340,6 +343,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         popular: data.popular,
         isUnlimited: data.is_unlimited,
         isActive: data.is_active,
+        order: data.order || 0,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
       };

@@ -10,6 +10,7 @@ interface AuthContextType {
   loading: boolean;
   profileLoading: boolean;
   initialAuthCheck: boolean;
+  sessionLoaded: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   adminLogin: (email: string, password: string) => Promise<boolean>;
   register: (email: string, password: string, phone?: string, referredBy?: string) => Promise<boolean>;
@@ -68,6 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(false);
   const [initialAuthCheck, setInitialAuthCheck] = useState(false);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -78,60 +80,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Supabase configuration is invalid, auth will likely fail');
     }
 
-    // Get initial session with fast fallback
+    // Get initial session - improved with better session recovery
     const getInitialSession = async () => {
       try {
-        // Set a fast timeout to show login page if auth check takes too long
-        const fastTimeout = setTimeout(() => {
-          if (mounted && !initialAuthCheck) {
-            console.log('Fast timeout reached, showing login page');
-            setLoading(false);
-            setInitialAuthCheck(true);
-          }
-        }, 1000); // Increased from 500ms to 1000ms for better reliability
-
-        // Check Supabase connection first
-        const connectionOk = await checkSupabaseConnection();
-        if (!connectionOk) {
-          console.warn('Supabase connection check failed, proceeding with auth check anyway');
-        }
-
+        console.log('Starting initial auth session check...');
+        
+        // First, try to get the session from Supabase
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (!mounted) return;
         
-        clearTimeout(fastTimeout);
-        
         if (error) {
           console.error('Error getting session:', error);
+          setAuthUser(null);
+          setUser(null);
           setLoading(false);
           setInitialAuthCheck(true);
+          setSessionLoaded(true);
           return;
         }
 
         if (session?.user) {
+          console.log('Session found, user authenticated:', session.user.email);
           setAuthUser(session.user);
-          // Fetch profile with timeout protection and retry
-          try {
-            await fetchUserProfileWithTimeout(session.user.id);
-          } catch (profileError) {
-            console.warn('Initial profile fetch failed, but continuing with auth:', profileError);
+          setSessionLoaded(true);
+          
+          // Fetch profile in background without blocking auth
+          fetchUserProfileWithTimeout(session.user.id).then(() => {
+            console.log('Profile loaded successfully');
+          }).catch((profileError) => {
+            console.warn('Profile fetch failed, using minimal profile:', profileError);
             // Create minimal profile as fallback
             const minimalProfile = createMinimalUserProfile(session.user);
             setUser(minimalProfile);
             setIsAdmin(false);
-            setLoading(false);
-            setInitialAuthCheck(true);
-          }
+          }).finally(() => {
+            if (mounted) {
+              setLoading(false);
+              setInitialAuthCheck(true);
+            }
+          });
         } else {
+          console.log('No active session found');
+          setAuthUser(null);
+          setUser(null);
           setLoading(false);
           setInitialAuthCheck(true);
+          setSessionLoaded(true);
         }
       } catch (error) {
         console.error('Error in getInitialSession:', error);
         if (mounted) {
+          setAuthUser(null);
+          setUser(null);
           setLoading(false);
           setInitialAuthCheck(true);
+          setSessionLoaded(true);
         }
       }
     };
@@ -140,38 +144,70 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       try {
         if (!mounted) return;
+        
+        console.log('Auth state changed:', event, session?.user?.email);
 
-        if (session?.user) {
-          setAuthUser(session.user);
-          // Fetch profile with timeout protection and retry
-          // Do not block or force logout if this times out
-          try {
-            await fetchUserProfileWithTimeout(session.user.id);
-          } catch (profileError) {
-            console.warn('Auth state change profile fetch failed, but continuing:', profileError);
-            // Create minimal profile as fallback
-            const minimalProfile = createMinimalUserProfile(session.user);
-            setUser(minimalProfile);
-            setIsAdmin(false);
-            setLoading(false);
-            setInitialAuthCheck(true);
+        // Handle different auth events
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+          if (session?.user) {
+            setAuthUser(session.user);
+            setSessionLoaded(true);
+            
+            // Fetch profile without blocking
+            fetchUserProfileWithTimeout(session.user.id).catch((profileError) => {
+              console.warn('Profile fetch failed on auth change:', profileError);
+              const minimalProfile = createMinimalUserProfile(session.user);
+              setUser(minimalProfile);
+              setIsAdmin(false);
+            }).finally(() => {
+              if (mounted) {
+                setLoading(false);
+                setInitialAuthCheck(true);
+              }
+            });
           }
-        } else {
+        } else if (event === 'SIGNED_OUT') {
           setAuthUser(null);
           setUser(null);
           setIsAdmin(false);
           setLoading(false);
           setInitialAuthCheck(true);
+          setSessionLoaded(true);
+        } else if (event === 'INITIAL_SESSION') {
+          // This event is fired when the session is restored from localStorage
+          if (session?.user) {
+            console.log('Initial session restored:', session.user.email);
+            setAuthUser(session.user);
+            setSessionLoaded(true);
+            
+            fetchUserProfileWithTimeout(session.user.id).catch((profileError) => {
+              console.warn('Profile fetch failed on initial session:', profileError);
+              const minimalProfile = createMinimalUserProfile(session.user);
+              setUser(minimalProfile);
+              setIsAdmin(false);
+            }).finally(() => {
+              if (mounted) {
+                setLoading(false);
+                setInitialAuthCheck(true);
+              }
+            });
+          } else {
+            setLoading(false);
+            setInitialAuthCheck(true);
+            setSessionLoaded(true);
+          }
         }
       } catch (error) {
         console.error('Error in auth state change:', error);
         if (mounted) {
           setLoading(false);
           setInitialAuthCheck(true);
+          setSessionLoaded(true);
         }
       }
     });
 
+    // Start the initial session check
     getInitialSession();
 
     return () => {
@@ -303,20 +339,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setProfileLoading(true);
       
-      // Check connection health first
-      try {
-        const { data: healthCheck } = await supabase
-          .from('profiles')
-          .select('id')
-          .limit(1);
-        console.log('Connection health check passed');
-      } catch (healthError) {
-        console.warn('Connection health check failed:', healthError);
-      }
-      
-      // Create a promise that rejects after 15 seconds (increased from 10)
+      // Create a promise that rejects after 10 seconds
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 15000);
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 10000);
       });
 
       // Race between profile fetch and timeout
@@ -325,25 +350,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         timeoutPromise
       ]);
     } catch (error) {
-      console.warn('Profile fetch failed or timed out (will not logout):', error);
+      console.warn('Profile fetch failed or timed out:', error);
       
-      // Try to fetch profile again without timeout as a fallback
-      try {
-        console.log('Attempting fallback profile fetch...');
-        await fetchUserProfile(userId);
-      } catch (fallbackError) {
-        console.warn('Fallback profile fetch also failed:', fallbackError);
-        
-        // Create minimal profile as last resort
-        if (authUser) {
-          console.log('Creating minimal user profile as fallback');
-          const minimalProfile = createMinimalUserProfile(authUser);
-          setUser(minimalProfile);
-          setIsAdmin(false);
-        }
+      // Don't logout, just use minimal profile
+      if (authUser) {
+        console.log('Using minimal user profile as fallback');
+        const minimalProfile = createMinimalUserProfile(authUser);
+        setUser(minimalProfile);
+        setIsAdmin(false);
       }
+      throw error; // Re-throw to be handled by caller
     } finally {
-      setLoading(false);
       setProfileLoading(false);
     }
   };
@@ -373,6 +390,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
+      setLoading(true);
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -380,26 +398,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Login error:', error);
+        setLoading(false);
         return false;
       }
 
       if (data.user) {
+        console.log('Login successful:', data.user.email);
         setAuthUser(data.user);
+        setSessionLoaded(true);
+        
+        // Try to fetch profile but don't fail login if it fails
         try {
-        await fetchUserProfile(data.user.id);
+          await fetchUserProfile(data.user.id);
         } catch (profileError) {
-          console.warn('Profile fetch failed during login, but login succeeded:', profileError);
-          // Create minimal profile as fallback
+          console.warn('Profile fetch failed during login, using minimal profile:', profileError);
           const minimalProfile = createMinimalUserProfile(data.user);
           setUser(minimalProfile);
           setIsAdmin(false);
         }
+        
+        setLoading(false);
+        setInitialAuthCheck(true);
         return true;
       }
 
+      setLoading(false);
       return false;
     } catch (error) {
       console.error('Login error:', error);
+      setLoading(false);
       return false;
     }
   };
@@ -702,8 +729,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Check if we should show login page immediately
-  const shouldShowLogin = !loading || initialAuthCheck;
+  // Check if we should show login page - only after session is loaded
+  const shouldShowLogin = sessionLoaded && !authUser;
 
   const isUserDegraded = (): boolean => {
     // User is considered degraded if they have a minimal profile (no referral code, default values)
@@ -858,6 +885,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loading,
       profileLoading,
       initialAuthCheck,
+      sessionLoaded,
       login,
       adminLogin,
       register,

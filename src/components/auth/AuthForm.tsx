@@ -60,7 +60,14 @@ export const AuthForm: React.FC<AuthFormProps> = ({ isAdmin = false }) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { login, register, adminLogin, profileLoading } = useAuth();
+  const { login, register, adminLogin, profileLoading, authUser } = useAuth();
+  
+  // If user is already authenticated, show a message
+  React.useEffect(() => {
+    if (authUser) {
+      console.log('User already authenticated, should redirect from login page');
+    }
+  }, [authUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

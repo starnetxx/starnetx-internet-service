@@ -56,7 +56,8 @@ export const WalletCard: React.FC<WalletCardProps> = ({ onTopUpClick }) => {
 
         <Button
           onClick={onTopUpClick}
-          className="bg-white/90 hover:bg-white text-gray-900 font-bold px-4 py-2 sm:px-6 sm:py-3 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 max-[400px]:px-3 max-[400px]:py-2 max-[400px]:text-sm"
+          variant="secondary"
+          className="!bg-white/90 hover:!bg-white !text-gray-900 font-bold px-4 py-2 sm:px-6 sm:py-3 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 max-[400px]:px-3 max-[400px]:py-2 max-[400px]:text-sm"
         >
           <TrendingUp className="mr-2" size={18} />
           Top Up +

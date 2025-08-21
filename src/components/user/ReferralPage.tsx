@@ -226,25 +226,25 @@ export const ReferralPage: React.FC = () => {
         
         <div className="space-y-4">
           <p className="text-sm text-gray-600 font-medium">Share this link:</p>
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <input
               type="text"
               value={referralUrl}
               readOnly
-              className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-2xl bg-white/80 backdrop-blur-sm text-sm font-medium focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400/50 transition-all duration-200"
+              className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-2xl bg-white/80 backdrop-blur-sm text-sm font-medium focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400/50 transition-all duration-200 min-w-0"
             />
             <Button
               variant="outline"
               size="sm"
               onClick={copyReferralCode}
-              className="px-6 py-3 bg-white border-2 border-blue-200 text-blue-700 font-semibold rounded-2xl hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 shadow-lg hover:shadow-xl"
+              className="px-6 py-3 bg-white border-2 border-blue-200 text-blue-700 font-semibold rounded-2xl hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 shadow-lg hover:shadow-xl whitespace-nowrap"
             >
-              Copy
+              Copy Link
             </Button>
           </div>
           
-          <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-6 rounded-2xl border border-emerald-200 flex items-center justify-between">
-            <div>
+          <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-6 rounded-2xl border border-emerald-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex-1">
               <p className="text-sm text-emerald-800 font-semibold mb-1">
                 Referral earnings eligible for payout at ≥ ₦{minPayout}
               </p>
@@ -255,7 +255,7 @@ export const ReferralPage: React.FC = () => {
             <Button 
               onClick={requestPayout} 
               disabled={!canRequestPayout || payoutRequesting}
-              className="bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white font-bold px-6 py-3 rounded-2xl transition-all duration-200 shadow-lg hover:shadow-xl disabled:from-gray-400 disabled:to-gray-500 disabled:shadow-none disabled:cursor-not-allowed"
+              className="w-full sm:w-auto bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white font-bold px-6 py-3 rounded-2xl transition-all duration-200 shadow-lg hover:shadow-xl disabled:from-gray-400 disabled:to-gray-500 disabled:shadow-none disabled:cursor-not-allowed"
             >
               {payoutRequesting ? 'Requesting...' : 'Request Payout'}
             </Button>

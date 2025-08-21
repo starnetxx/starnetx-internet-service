@@ -60,15 +60,15 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({ purc
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto print:w-[794px]">
-        <div className="sticky top-0 bg-white p-4 border-b flex justify-between items-center">
+      <Card className="w-full max-w-md max-h-[80vh] mb-16 overflow-hidden flex flex-col print:w-[794px]">
+        <div className="sticky top-0 bg-white p-4 border-b flex justify-between items-center flex-shrink-0">
           <h2 className="text-xl font-bold text-gray-900">Purchase Receipt</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
             <X size={24} />
           </button>
         </div>
 
-        <div id="receipt-content" className="p-6 text-sm leading-tight space-y-4">
+        <div id="receipt-content" className="p-6 text-sm leading-tight space-y-4 overflow-y-auto flex-1">
           {/* Header */}
           <div className="text-center mb-6">
             <h1 className="text-2xl font-bold text-blue-600 mb-2">StarNetX</h1>
@@ -213,7 +213,7 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({ purc
           </div>
         </div>
 
-          <div className="sticky bottom-0 bg-white p-3 border-t flex gap-3 print:hidden">
+        <div className="sticky bottom-0 bg-white p-3 border-t flex gap-3 print:hidden flex-shrink-0">
           <Button
             onClick={handleDownloadPDF}
             className="flex-1 flex items-center justify-center gap-2"

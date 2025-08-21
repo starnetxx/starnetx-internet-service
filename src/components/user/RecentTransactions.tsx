@@ -10,7 +10,7 @@ interface RecentTransactionsProps {
 
 export const RecentTransactions: React.FC<RecentTransactionsProps> = ({ onNavigateToHistory }) => {
   const { user } = useAuth();
-  const { getUserPurchases, plans, locations, userDataLoading } = useData();
+  const { getUserPurchases, plans, locations } = useData();
 
   const userPurchases = getUserPurchases(user?.id || '');
   
@@ -18,23 +18,6 @@ export const RecentTransactions: React.FC<RecentTransactionsProps> = ({ onNaviga
   const recentTransactions = userPurchases
     .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())
     .slice(0, 2);
-
-  // Show loading state while user data is being fetched
-  if (userDataLoading) {
-    return (
-      <Card className="p-6 mb-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-0">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <Clock className="text-white" size={28} />
-          </div>
-          <h3 className="font-bold text-gray-900 mb-2 text-lg">Loading...</h3>
-          <p className="text-sm text-gray-600 leading-relaxed">
-            Fetching your recent transactions...
-          </p>
-        </div>
-      </Card>
-    );
-  }
 
   const getStatusColor = (status: string) => {
     switch (status) {

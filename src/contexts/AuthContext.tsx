@@ -105,7 +105,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setAuthUser(session.user);
           setSessionLoaded(true);
           
-          // Fetch profile in background without blocking auth
+          // Set loading to false immediately after session is confirmed
+          setLoading(false);
+          setInitialAuthCheck(true);
+          
+          // Fetch profile in background without blocking UI
           fetchUserProfileWithTimeout(session.user.id).then(() => {
             console.log('Profile loaded successfully');
           }).catch((profileError) => {
@@ -114,11 +118,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const minimalProfile = createMinimalUserProfile(session.user);
             setUser(minimalProfile);
             setIsAdmin(false);
-          }).finally(() => {
-            if (mounted) {
-              setLoading(false);
-              setInitialAuthCheck(true);
-            }
           });
         } else {
           console.log('No active session found');
@@ -339,9 +338,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setProfileLoading(true);
       
-      // Create a promise that rejects after 10 seconds
+      // Create a promise that rejects after 5 seconds (reduced from 10)
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 10000);
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 5000);
       });
 
       // Race between profile fetch and timeout

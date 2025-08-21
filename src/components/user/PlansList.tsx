@@ -18,8 +18,8 @@ export const PlansList: React.FC<PlansListProps> = ({ showAll = false, onSeeAllC
   
   const displayPlans = showAll ? plans : plans.slice(0, 2);
 
-  // Show loading state while plans are being fetched
-  if (loading) {
+  // Show loading state only during initial load when there are no plans yet
+  if (loading && plans.length === 0) {
     return (
       <div>
         {/* Hero Section with Loading State */}

@@ -4,6 +4,7 @@ import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Wifi } from 'lucide-react';
+import { secureStorage } from '../../utils/secureStorage';
 
 interface AuthFormProps {
   isAdmin?: boolean;
@@ -59,8 +60,25 @@ export const AuthForm: React.FC<AuthFormProps> = ({ isAdmin = false }) => {
   const [referralCode, setReferralCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   
   const { login, register, adminLogin, profileLoading, authUser } = useAuth();
+  
+  // Load saved credentials on component mount and optionally auto-login
+  React.useEffect(() => {
+    const credentials = secureStorage.getCredentials();
+    if (credentials && credentials.rememberMe) {
+      setEmail(credentials.email);
+      setPassword(credentials.password);
+      setRememberMe(true);
+      
+      // Optional: Auto-login if credentials exist and user is not authenticated
+      // Uncomment the following lines to enable auto-login
+      // if (!authUser && !loading) {
+      //   handleAutoLogin(credentials.email, credentials.password);
+      // }
+    }
+  }, []);
   
   // If user is already authenticated, show a message
   React.useEffect(() => {
@@ -86,6 +104,9 @@ export const AuthForm: React.FC<AuthFormProps> = ({ isAdmin = false }) => {
         success = await login(email, password);
         if (!success) {
           setError('Invalid email or password');
+        } else {
+          // Save or clear credentials based on remember me
+          secureStorage.saveCredentials(email, password, rememberMe);
         }
       } else {
         success = await register(email, password, phone, referralCode);
@@ -169,6 +190,28 @@ export const AuthForm: React.FC<AuthFormProps> = ({ isAdmin = false }) => {
                 onChange={setReferralCode}
                 placeholder="Enter referral code (optional)"
               />
+            )}
+
+            {isLogin && !isAdmin && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 px-1">
+                  <input
+                    type="checkbox"
+                    id="rememberMe"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 bg-white/10 border-white/30 rounded focus:ring-blue-500 focus:ring-2"
+                  />
+                  <label htmlFor="rememberMe" className="text-white/80 text-sm font-medium cursor-pointer hover:text-white transition-colors">
+                    Remember me
+                  </label>
+                </div>
+                {rememberMe && email && password && (
+                  <div className="px-1 text-xs text-green-300/80 font-medium">
+                    ✓ Credentials saved for quick login
+                  </div>
+                )}
+              </div>
             )}
 
             {error && (

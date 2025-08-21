@@ -13,7 +13,7 @@ interface AuthContextType {
   sessionLoaded: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   adminLogin: (email: string, password: string) => Promise<boolean>;
-  register: (email: string, password: string, phone?: string, referredBy?: string) => Promise<boolean>;
+  register: (email: string, password: string, phone?: string, referredBy?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   updateWalletBalance: (amount: number) => Promise<void>;
   refreshProfile: () => void;
@@ -465,23 +465,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const register = async (email: string, password: string, phone?: string, referredBy?: string): Promise<boolean> => {
+  const register = async (email: string, password: string, phone?: string, referredBy?: string): Promise<{ success: boolean; error?: string }> => {
     try {
       
       // Check if referral code exists if provided
-      let referrerUser = null;
-      if (referredBy) {
-        const { data: referrer, error: referrerError } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('referral_code', referredBy.toUpperCase())
-          .single();
+      let referrerUserId = null;
+      if (referredBy && referredBy.trim() !== '') {
+        console.log('Checking referral code:', referredBy.toUpperCase());
         
-        if (referrerError || !referrer) {
-          console.error('Invalid referral code');
-          return false;
+        // Use RPC function to validate referral code (works for anonymous users)
+        const { data: referrerId, error: rpcError } = await supabase
+          .rpc('validate_referral_code', { code: referredBy });
+        
+        if (rpcError) {
+          console.error('Error calling validate_referral_code RPC:', rpcError);
+          // Fallback to direct query if RPC doesn't exist yet
+          const { data: referrer, error: referrerError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('referral_code', referredBy.toUpperCase())
+            .maybeSingle();
+          
+          if (referrerError && referrerError.code !== 'PGRST116') {
+            console.error('Referral code check error:', referrerError);
+            return { success: false, error: 'Unable to validate referral code. Please try again.' };
+          } else if (!referrer && referrerError?.code !== 'PGRST116') {
+            console.error('Referral code not found:', referredBy);
+            return { success: false, error: 'Invalid referral code. The code does not exist.' };
+          } else if (referrer) {
+            console.log('Valid referral code found (fallback method)');
+            referrerUserId = referrer.id;
+          }
+          // If we get PGRST116, we'll let the signup proceed and handle it server-side
+        } else if (!referrerId) {
+          console.error('Referral code not found:', referredBy);
+          return { success: false, error: 'Invalid referral code. The code does not exist.' };
+        } else {
+          console.log('Valid referral code found for user:', referrerId);
+          referrerUserId = referrerId;
         }
-        referrerUser = referrer;
       }
 
       const { data, error } = await supabase.auth.signUp({
@@ -491,14 +513,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           data: {
             phone: phone || null,
             referral_code: generateReferralCode(),
-            referred_by: referrerUser?.id || null,
+            referred_by: referrerUserId || null,
           }
         }
       });
 
       if (error) {
         console.error('Registration error:', error);
-        return false;
+        // Check for specific error types
+        if (error.message?.includes('already registered') || error.message?.includes('already exists')) {
+          return { success: false, error: 'This email is already registered. Please sign in instead.' };
+        }
+        if (error.message?.includes('password')) {
+          return { success: false, error: 'Password must be at least 6 characters long.' };
+        }
+        if (error.message?.includes('email')) {
+          return { success: false, error: 'Please enter a valid email address.' };
+        }
+        return { success: false, error: 'Registration failed. Please try again.' };
       }
 
       if (data.user) {
@@ -508,13 +540,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setTimeout(async () => {
           await fetchUserProfile(user.id);
         }, 1000);
-        return true;
+        return { success: true };
       }
 
-      return false;
+      return { success: false, error: 'Registration failed. Please try again.' };
     } catch (error) {
       console.error('Registration error:', error);
-      return false;
+      return { success: false, error: 'An unexpected error occurred. Please try again.' };
     }
   };
 

@@ -109,9 +109,10 @@ export const AuthForm: React.FC<AuthFormProps> = ({ isAdmin = false }) => {
           secureStorage.saveCredentials(email, password, rememberMe);
         }
       } else {
-        success = await register(email, password, phone, referralCode);
+        const result = await register(email, password, phone, referralCode);
+        success = result.success;
         if (!success) {
-          setError('Registration failed. Email may already exist or referral code is invalid.');
+          setError(result.error || 'Registration failed. Please try again.');
         }
       }
     } catch (err) {

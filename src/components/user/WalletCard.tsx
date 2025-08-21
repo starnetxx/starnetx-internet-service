@@ -47,8 +47,8 @@ export const WalletCard: React.FC<WalletCardProps> = ({ onTopUpClick }) => {
             <CreditCard className="text-white" size={24} />
           </div>
           <div>
-            <p className="text-gray-600 text-sm font-medium mb-2">Balance</p>
-            <p className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight drop-shadow-sm max-[400px]:text-xl">
+            <p className="text-white/80 text-sm font-medium mb-2">Balance</p>
+            <p className="text-2xl sm:text-3xl font-black text-white tracking-tight drop-shadow-sm max-[400px]:text-xl">
               ₦ {user?.walletBalance?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
             </p>
           </div>
@@ -58,9 +58,8 @@ export const WalletCard: React.FC<WalletCardProps> = ({ onTopUpClick }) => {
           onClick={onTopUpClick}
           className="bg-white/90 hover:bg-white text-gray-900 font-bold px-4 py-2 sm:px-6 sm:py-3 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 max-[400px]:px-3 max-[400px]:py-2 max-[400px]:text-sm"
         >
-          <TrendingUp className="mr-2 max-[400px]:mr-1" size={18} />
-          <span className="hidden sm:inline">Top Up</span>
-          <span className="sm:hidden">Add</span>
+          <TrendingUp className="mr-2" size={18} />
+          Top Up +
         </Button>
       </div>
     </div>

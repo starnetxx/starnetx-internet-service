@@ -3,7 +3,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { useAuth, getAllUsers } from '../../contexts/AuthContext';
 import { useData } from '../../contexts/DataContext';
-import { Copy, Users, DollarSign } from 'lucide-react';
+import { Copy, Users, DollarSign, Share2, TrendingUp, Gift, ArrowRight, Star, Sparkles } from 'lucide-react';
 import { supabase } from '../../utils/supabase';
 
 export const ReferralPage: React.FC = () => {
@@ -177,21 +177,38 @@ export const ReferralPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Invite Friends</h1>
-        <p className="text-gray-600">
+    <div className="space-y-8 min-h-[calc(100vh-400px)] max-[380px]:min-h-[calc(100vh-350px)] max-[360px]:min-h-[calc(100vh-320px)] max-[350px]:min-h-[calc(100vh-300px)]">
+      {/* Hero Section */}
+      <div className="text-center space-y-4">
+        <div className="relative inline-block">
+          <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl">
+            <Share2 className="text-white" size={32} />
+          </div>
+          {/* Decorative elements */}
+          <div className="absolute -top-2 -right-2 w-4 h-4 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full animate-pulse"></div>
+          <div className="absolute -bottom-2 -left-2 w-3 h-3 bg-gradient-to-r from-pink-400 to-purple-500 rounded-full animate-pulse delay-1000"></div>
+        </div>
+        
+        <h1 className="text-4xl font-black text-gray-900 mb-3 bg-gradient-to-r from-blue-600 to-indigo-700 bg-clip-text text-transparent">
+          Invite Friends
+        </h1>
+        <p className="text-xl text-gray-600 max-w-2xl mx-auto leading-relaxed">
           Earn 10% commission on every purchase your referred friends make
         </p>
       </div>
 
-      <Card className="p-6">
-        <h2 className="text-lg font-semibold mb-4">Your Referral Code</h2>
-        <div className="bg-gray-50 p-4 rounded-lg mb-4">
+      {/* Referral Code Card */}
+      <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-3xl p-8 border border-blue-100 shadow-xl">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Your Referral Code</h2>
+          <p className="text-gray-600">Share this unique code with friends and family</p>
+        </div>
+        
+        <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-white/50 shadow-lg mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Referral Code</p>
-              <p className="text-xl font-mono font-bold text-blue-600">
+              <p className="text-sm text-gray-600 mb-1">Referral Code</p>
+              <p className="text-3xl font-black text-transparent bg-gradient-to-r from-blue-600 to-indigo-700 bg-clip-text">
                 {user?.referralCode}
               </p>
             </div>
@@ -199,7 +216,7 @@ export const ReferralPage: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={copyReferralCode}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 bg-white border-2 border-blue-200 text-blue-700 font-semibold rounded-xl hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 shadow-lg hover:shadow-xl"
             >
               <Copy size={16} />
               {copied ? 'Copied!' : 'Copy'}
@@ -207,75 +224,99 @@ export const ReferralPage: React.FC = () => {
           </div>
         </div>
         
-        <div className="space-y-2">
-          <p className="text-sm text-gray-600">Share this link:</p>
-          <div className="flex gap-2">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 font-medium">Share this link:</p>
+          <div className="flex gap-3">
             <input
               type="text"
               value={referralUrl}
               readOnly
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm"
+              className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-2xl bg-white/80 backdrop-blur-sm text-sm font-medium focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400/50 transition-all duration-200"
             />
             <Button
               variant="outline"
               size="sm"
               onClick={copyReferralCode}
+              className="px-6 py-3 bg-white border-2 border-blue-200 text-blue-700 font-semibold rounded-2xl hover:bg-blue-50 hover:border-blue-300 transition-all duration-200 shadow-lg hover:shadow-xl"
             >
               Copy
             </Button>
           </div>
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg flex items-center justify-between">
+          
+          <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-6 rounded-2xl border border-emerald-200 flex items-center justify-between">
             <div>
-              <p className="text-sm text-blue-800">Referral earnings eligible for payout at ≥ ₦{minPayout}</p>
-              <p className="text-xs text-blue-700">Your earnings: ₦{myEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              <p className="text-sm text-emerald-800 font-semibold mb-1">
+                Referral earnings eligible for payout at ≥ ₦{minPayout}
+              </p>
+              <p className="text-lg text-emerald-900 font-bold">
+                Your earnings: ₦{myEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
             </div>
-            <Button onClick={requestPayout} disabled={!canRequestPayout || payoutRequesting}>
+            <Button 
+              onClick={requestPayout} 
+              disabled={!canRequestPayout || payoutRequesting}
+              className="bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white font-bold px-6 py-3 rounded-2xl transition-all duration-200 shadow-lg hover:shadow-xl disabled:from-gray-400 disabled:to-gray-500 disabled:shadow-none disabled:cursor-not-allowed"
+            >
               {payoutRequesting ? 'Requesting...' : 'Request Payout'}
             </Button>
           </div>
-          {payoutMessage && <p className="text-sm text-green-700 mt-2">{payoutMessage}</p>}
+          {payoutMessage && (
+            <div className="bg-green-100 border border-green-200 text-green-800 px-4 py-3 rounded-2xl text-sm font-medium">
+              {payoutMessage}
+            </div>
+          )}
         </div>
-      </Card>
+      </div>
 
-      <Card className="p-6">
-        <h2 className="text-lg font-semibold mb-4">Referral Statistics</h2>
+      {/* Referral Statistics */}
+      <div className="bg-gradient-to-br from-slate-50 to-gray-50 rounded-3xl p-8 border border-gray-100 shadow-xl">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Referral Statistics</h2>
+          <p className="text-gray-600">Track your referral success and earnings</p>
+        </div>
+        
         {myReferrals.length > 0 ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-blue-50 p-4 rounded-lg text-center">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <Users className="text-blue-600" size={24} />
+          <div className="space-y-8">
+            <div className="grid grid-cols-2 gap-6">
+              <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-6 rounded-2xl text-center text-white shadow-xl border border-blue-400/30">
+                <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-4 border-2 border-white/30">
+                  <Users className="text-white" size={28} />
                 </div>
-                <p className="text-2xl font-bold text-blue-900">{myReferrals.length}</p>
-                <p className="text-sm text-blue-700">Total Referrals</p>
+                <p className="text-4xl font-black mb-2 drop-shadow-lg">{myReferrals.length}</p>
+                <p className="text-blue-100 font-semibold">Total Referrals</p>
               </div>
-              <div className="bg-green-50 p-4 rounded-lg text-center">
-                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <DollarSign className="text-green-600" size={24} />
+              <div className="bg-gradient-to-br from-emerald-500 to-green-600 p-6 rounded-2xl text-center text-white shadow-xl border border-emerald-400/30">
+                <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-4 border-2 border-white/30">
+                  <DollarSign className="text-white" size={28} />
                 </div>
-                <p className="text-2xl font-bold text-green-900">₦{myEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                <p className="text-sm text-green-700">Total Earnings</p>
+                <p className="text-4xl font-black mb-2 drop-shadow-lg">₦{myEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                <p className="text-emerald-100 font-semibold">Total Earnings</p>
               </div>
             </div>
             
             <div>
-              <h3 className="font-semibold mb-2">Your Referrals</h3>
-              <div className="space-y-2">
+              <h3 className="font-bold text-xl text-gray-900 mb-4 flex items-center gap-2">
+                <TrendingUp className="text-blue-600" size={24} />
+                Your Referrals
+              </h3>
+              <div className="space-y-3">
                 {myReferrals.map((referredUser) => {
                   const userPurchases = allPurchases.filter(p => p.userId === referredUser.id);
                   const userEarnings = userPurchases.reduce((total, purchase) => total + (purchase.amount * 0.1), 0);
                   
                   return (
-                    <div key={referredUser.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <p className="font-medium text-gray-900">{referredUser.email}</p>
-                        <p className="text-sm text-gray-600">
-                          Joined {new Date(referredUser.createdAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-gray-900">₦{userEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                        <p className="text-sm text-gray-600">{userPurchases.length} purchases</p>
+                    <div key={referredUser.id} className="bg-white/80 backdrop-blur-sm p-4 rounded-2xl border border-white/50 shadow-lg hover:shadow-xl transition-all duration-200">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-bold text-gray-900">{referredUser.email}</p>
+                          <p className="text-sm text-gray-600">
+                            Joined {new Date(referredUser.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-2xl text-emerald-600">₦{userEarnings.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                          <p className="text-sm text-gray-600">{userPurchases.length} purchases</p>
+                        </div>
                       </div>
                     </div>
                   );
@@ -284,53 +325,63 @@ export const ReferralPage: React.FC = () => {
             </div>
           </div>
         ) : loadingUsers ? (
-          <div className="text-center py-8">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4" />
-            <p className="text-gray-600 mb-2">Loading referrals...</p>
+          <div className="text-center py-12">
+            <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-3xl flex items-center justify-center mx-auto mb-6 animate-pulse">
+              <Users className="text-blue-400" size={32} />
+            </div>
+            <p className="text-gray-600 mb-2 text-lg font-medium">Loading referrals...</p>
           </div>
         ) : (
-          <div className="text-center py-8">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="text-center py-12">
+            <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl flex items-center justify-center mx-auto mb-6">
               <Users className="text-gray-400" size={32} />
             </div>
-            <p className="text-gray-600 mb-2">No referral data available yet</p>
-            <p className="text-sm text-gray-500">Start sharing your referral code to see your earnings here!</p>
+            <p className="text-gray-600 mb-2 text-lg font-medium">No referral data available yet</p>
+            <p className="text-gray-500">Start sharing your referral code to see your earnings here!</p>
           </div>
         )}
-      </Card>
+      </div>
 
-      <Card className="p-6">
-        <h2 className="text-lg font-semibold mb-4">How it Works</h2>
-        <div className="space-y-4">
-          <div className="flex gap-3">
-            <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
+      {/* How it Works */}
+      <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-3xl p-8 border border-purple-100 shadow-xl">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">How it Works</h2>
+          <p className="text-gray-600">Simple steps to start earning with referrals</p>
+        </div>
+        
+        <div className="space-y-6">
+          <div className="flex gap-6 items-start">
+            <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl flex items-center justify-center text-white text-lg font-black shadow-lg border-2 border-white/30">
               1
             </div>
-            <div>
-              <p className="font-medium">{howItWorks.step1Title}</p>
-              <p className="text-sm text-gray-600">{howItWorks.step1Desc}</p>
+            <div className="flex-1">
+              <p className="font-bold text-lg text-gray-900 mb-2">{howItWorks.step1Title}</p>
+              <p className="text-gray-600 leading-relaxed">{howItWorks.step1Desc}</p>
             </div>
           </div>
-          <div className="flex gap-3">
-            <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
+          <div className="flex gap-6 items-start">
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center text-white text-lg font-black shadow-lg border-2 border-white/30">
               2
             </div>
-            <div>
-              <p className="font-medium">{howItWorks.step2Title}</p>
-              <p className="text-sm text-gray-600">{howItWorks.step2Desc}</p>
+            <div className="flex-1">
+              <p className="font-bold text-lg text-gray-900 mb-2">{howItWorks.step2Title}</p>
+              <p className="text-gray-600 leading-relaxed">{howItWorks.step2Desc}</p>
             </div>
           </div>
-          <div className="flex gap-3">
-            <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
+          <div className="flex gap-6 items-start">
+            <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl flex items-center justify-center text-white text-lg font-black shadow-lg border-2 border-white/30">
               3
             </div>
-            <div>
-              <p className="font-medium">{howItWorks.step3Title}</p>
-              <p className="text-sm text-gray-600">{howItWorks.step3Desc}</p>
+            <div className="flex-1">
+              <p className="font-bold text-lg text-gray-900 mb-2">{howItWorks.step3Title}</p>
+              <p className="text-gray-600 leading-relaxed">{howItWorks.step3Desc}</p>
             </div>
           </div>
         </div>
-      </Card>
+      </div>
+      
+      {/* Consistent bottom spacing */}
+      <div className="h-8"></div>
     </div>
   );
 };

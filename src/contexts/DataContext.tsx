@@ -8,6 +8,8 @@ interface DataContextType {
   purchases: Purchase[];
   credentials: Credential[];
   loading: boolean;
+  userDataLoading: boolean;
+  isPurchaseInProgress: boolean;
   addPlan: (plan: Omit<Plan, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updatePlan: (id: string, plan: Partial<Plan>) => Promise<void>;
   deletePlan: (id: string) => Promise<void>;
@@ -26,6 +28,7 @@ interface DataContextType {
   getAllPurchases: () => Purchase[];
   getUserTransactions: (userId: string) => any[];
   getAllTransactions: () => any[];
+  refreshData: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -36,24 +39,102 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [credentials, setCredentials] = useState<Credential[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start with false, set true only when actually loading
+  const [userDataLoading, setUserDataLoading] = useState(false);
+  const [isPurchaseInProgress, setIsPurchaseInProgress] = useState(false);
+  const [initialLoadStarted, setInitialLoadStarted] = useState(false);
 
   useEffect(() => {
     loadInitialData();
   }, []);
 
+  // After auth login, reload user-scoped data so UI reflects purchases without manual refresh
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('DataContext: Auth state changed:', event);
+      
+      // Only reload data on actual sign in, not on initial session or token refresh
+      if (event === 'SIGNED_IN' && session?.user) {
+        try {
+          setUserDataLoading(true);
+          console.log('User signed in, reloading user data...');
+          // Reload all user data
+          await Promise.all([
+            loadPurchases(), 
+            loadCredentials(),
+            loadTransactions()
+          ]);
+        } catch (e) {
+          console.error('Error reloading data after login:', e);
+        } finally {
+          setUserDataLoading(false);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        // On logout, clear user-scoped data
+        console.log('User signed out, clearing data...');
+        setPurchases([]);
+        setCredentials([]);
+        setTransactions([]);
+        setUserDataLoading(false);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
   const loadInitialData = async () => {
+    // Prevent multiple simultaneous initial loads
+    if (initialLoadStarted) {
+      console.log('Initial load already started, skipping...');
+      return;
+    }
+    
+    setInitialLoadStarted(true);
+    
     try {
       setLoading(true);
-      // Ensure plans are loaded before credentials so plan type mapping is accurate
-      await loadPlans();
-      await Promise.all([
-        loadLocations(),
-        loadPurchases(),
-        loadCredentials(),
+      console.log('Loading initial data...');
+      
+      // Load public data first (plans and locations)
+      const publicDataPromise = Promise.all([
+        loadPlans(),
+        loadLocations()
       ]);
+      
+      // Load user data in parallel if authenticated
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        console.log('User authenticated, loading all data...');
+        // Load everything in parallel for better performance
+        await Promise.all([
+          publicDataPromise,
+          loadPurchases(),
+          loadCredentials(),
+          loadTransactions()
+        ]);
+      } else {
+        console.log('No user session, loading public data only...');
+        await publicDataPromise;
+      }
+      
+      console.log('Initial data load complete');
     } catch (error) {
       console.error('Error loading initial data:', error);
+      setLoading(false); // Ensure loading stops even on error
+      // Reset the flag on error so it can retry
+      setInitialLoadStarted(false);
+      
+      // Add retry logic for network errors
+      if (error instanceof Error && error.message.includes('network')) {
+        console.log('Network error detected, retrying in 3 seconds...');
+        setTimeout(() => {
+          loadInitialData();
+        }, 3000);
+        return;
+      }
     } finally {
       setLoading(false);
     }
@@ -65,10 +146,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .from('plans')
         .select('*')
         .eq('is_active', true)
-        .order('price', { ascending: true });
+        .order('order', { ascending: true })
+        .order('price', { ascending: true }); // Fallback sorting by price if order is null
 
       if (error) {
         console.error('Error loading plans:', error);
+        // Don't retry here, let the main loadInitialData handle retries
         return;
       }
 
@@ -83,6 +166,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         popular: plan.popular,
         isUnlimited: plan.is_unlimited,
         isActive: plan.is_active,
+        order: plan.order || 0, // Default to 0 if order is null
         createdAt: plan.created_at,
         updatedAt: plan.updated_at,
       }));
@@ -90,6 +174,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setPlans(formattedPlans);
     } catch (error) {
       console.error('Error loading plans:', error);
+      // Don't retry here, let the main loadInitialData handle retries
     }
   };
 
@@ -130,6 +215,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Error loading purchases:', error);
+        // Don't let this error block the UI
+        setPurchases([]);
         return;
       }
 
@@ -167,6 +254,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loadTransactions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading transactions:', error);
+        setTransactions([]);
+        return;
+      }
+
+      setTransactions(data || []);
+    } catch (error) {
+      console.error('Error loading transactions:', error);
+      setTransactions([]);
+    }
+  };
+
   const loadCredentials = async () => {
     try {
       const { data, error } = await supabase
@@ -176,6 +283,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Error loading credentials:', error);
+        // Don't let this error block the UI
+        setCredentials([]);
         return;
       }
 
@@ -256,6 +365,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           popular: planData.popular || false,
           is_unlimited: planData.isUnlimited || false,
           is_active: planData.isActive !== false, // Default to true
+          order: plans.length, // Add new plans at the end
         })
         .select()
         .single();
@@ -276,6 +386,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         popular: data.popular,
         isUnlimited: data.is_unlimited,
         isActive: data.is_active,
+        order: data.order || 0,
         createdAt: data.created_at,
         updatedAt: data.updated_at,
       };
@@ -656,9 +767,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Purchase management
   const purchasePlan = async (planId: string, locationId: string, userId: string): Promise<Purchase | null> => {
+    // Prevent multiple simultaneous purchases
+    if (isPurchaseInProgress) {
+      console.error('Purchase already in progress');
+      return null;
+    }
+
+    setIsPurchaseInProgress(true);
+    
     try {
       const plan = plans.find(p => p.id === planId);
       if (!plan) return null;
+
+      // First, verify user has sufficient balance with a fresh check
+      const { data: userProfile, error: userError } = await supabase
+        .from('profiles')
+        .select('wallet_balance')
+        .eq('id', userId)
+        .single();
+
+      if (userError || !userProfile) {
+        console.error('Error fetching user profile:', userError);
+        return null;
+      }
+
+      if (userProfile.wallet_balance < plan.price) {
+        console.error('Insufficient balance for purchase');
+        return null;
+      }
 
       // Get available credential
       const credential = await getAvailableCredential(locationId, planId);
@@ -759,6 +895,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Error purchasing plan:', error);
       return null;
+    } finally {
+      setIsPurchaseInProgress(false);
     }
   };
 
@@ -849,6 +987,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       purchases,
       credentials,
       loading,
+      userDataLoading,
+      isPurchaseInProgress,
       addPlan,
       updatePlan,
       deletePlan,
@@ -867,6 +1007,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getAllPurchases,
       getUserTransactions,
       getAllTransactions,
+      refreshData: async () => {
+        // Force a fresh load of all data
+        console.log('Refreshing all data...');
+        setLoading(true);
+        try {
+          // Load public data
+          await Promise.all([
+            loadPlans(),
+            loadLocations()
+          ]);
+          
+          // Load user data if authenticated
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            await Promise.all([
+              loadPurchases(),
+              loadCredentials(),
+              loadTransactions()
+            ]);
+          }
+        } catch (error) {
+          console.error('Error refreshing data:', error);
+        } finally {
+          setLoading(false);
+        }
+      },
     }}>
       {children}
     </DataContext.Provider>

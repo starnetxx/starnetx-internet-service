@@ -18,14 +18,15 @@ export interface User {
 export interface Plan {
   id: string;
   name: string;
-  duration: string; // e.g., "3 Hours", "1 Day", "1 Week"
+  duration: string; // e.g., "3 Hours", "1 Day", "1 Week", "Custom Duration"
   durationHours: number;
   price: number;
   dataAmount: string; // e.g., "2 GB", "Unlimited"
-  type: '3-hour' | 'daily' | 'weekly' | 'monthly';
+  type: '3-hour' | 'daily' | 'weekly' | 'monthly' | 'custom';
   popular: boolean;
   isUnlimited: boolean;
   isActive: boolean;
+  order: number; // New field for plan ordering
   createdAt: string;
   updatedAt: string;
 }
@@ -46,8 +47,8 @@ export interface Transaction {
   locationId?: string;
   credentialId?: string;
   amount: number;
-  type: 'wallet_topup' | 'plan_purchase';
-  status: 'pending' | 'completed' | 'failed';
+  type: 'wallet_topup' | 'plan_purchase' | 'wallet_funding';
+  status: 'pending' | 'completed' | 'failed' | 'success' | 'active' | 'expired' | 'used';
   mikrotikUsername?: string;
   mikrotikPassword?: string;
   expiresAt?: string;
@@ -85,7 +86,7 @@ export interface Purchase extends Transaction {
 }
 
 export interface Credential extends CredentialPool {
-  planType: '3-hour' | 'daily' | 'weekly' | 'monthly';
+  planType: '3-hour' | 'daily' | 'weekly' | 'monthly' | 'custom';
   assignedUserId?: string;
   assignedPurchaseId?: string;
   assignedDate?: string;

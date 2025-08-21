@@ -120,6 +120,7 @@ export const TransactionHistory: React.FC = () => {
       setTransactions(transformedTransactions);
     } catch (error) {
       console.error('Error loading transactions:', error);
+      setTransactions([]); // Set empty array on error
     } finally {
       setLoading(false);
     }

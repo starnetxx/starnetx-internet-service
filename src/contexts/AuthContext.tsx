@@ -80,17 +80,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Supabase configuration is invalid, auth will likely fail');
     }
 
-    // Get initial session - improved with better session recovery
+    // Get initial session with timeout protection
     const getInitialSession = async () => {
       try {
         console.log('Starting initial auth session check...');
         
-        const { data: { session }, error } = await supabase.auth.getSession();
+        // Create a timeout promise that rejects after 5 seconds
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Session check timeout')), 5000);
+        });
+        
+        // Race between session check and timeout
+        const { data: { session }, error } = await Promise.race([
+          supabase.auth.getSession(),
+          timeoutPromise
+        ]).catch((err) => {
+          console.warn('Session check timed out or failed:', err);
+          return { data: { session: null }, error: err };
+        });
         
         if (!mounted) return;
-        
-        // Always set sessionLoaded after checking
-        setSessionLoaded(true);
         
         if (error) {
           console.error('Error getting session:', error);
@@ -98,6 +107,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(null);
           setLoading(false);
           setInitialAuthCheck(true);
+          setSessionLoaded(true);
           return;
         }
 
@@ -106,24 +116,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setAuthUser(session.user);
           setLoading(false); // Set loading false immediately
           setInitialAuthCheck(true);
+          setSessionLoaded(true); // Mark session as loaded immediately
           
-          // Fetch profile in background
+          // Fetch profile in background without blocking
           fetchUserProfileWithTimeout(session.user.id)
             .then(() => console.log('Profile loaded successfully'))
-            .finally(() => {
-              // Ensure loading is false and session is loaded
-              setLoading(false);
-              setSessionLoaded(true);
-            });
+            .catch((err) => console.log('Profile load failed, using minimal profile'));
         } else {
           console.log('No active session found');
           setAuthUser(null);
           setUser(null);
           setLoading(false);
           setInitialAuthCheck(true);
+          setSessionLoaded(true);
         }
       } catch (error) {
-        console.error('Error in getInitialSession:', error);
+        console.error('Unexpected error in getInitialSession:', error);
         if (mounted) {
           setAuthUser(null);
           setUser(null);
@@ -207,10 +215,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Start the initial session check
     getInitialSession();
+    
+    // Failsafe: If still loading after 10 seconds, force clear loading state
+    const failsafeTimeout = setTimeout(() => {
+      if (mounted && loading) {
+        console.warn('Auth check taking too long, forcing loading state to false');
+        setLoading(false);
+        setSessionLoaded(true);
+        setInitialAuthCheck(true);
+      }
+    }, 10000);
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
+      clearTimeout(failsafeTimeout);
     };
   }, []);
 

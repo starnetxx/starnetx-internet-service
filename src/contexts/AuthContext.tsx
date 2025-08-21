@@ -260,41 +260,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => clearInterval(interval);
   }, [authUser?.id, user]);
 
-  const fetchUserProfile = async (userId: string, retryCount = 0) => {
+  const fetchUserProfile = async (userId: string) => {
     try {
-      console.log(`Fetching profile for user ${userId} (attempt ${retryCount + 1})`);
       setProfileLoading(true);
       
-      const startTime = Date.now();
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
-      const endTime = Date.now();
-      
-      console.log(`Profile fetch completed in ${endTime - startTime}ms`);
 
       if (error) {
-        console.error('Error fetching user profile:', error);
-        
-        // Check if it's a permission or table access issue
-        if (error.code === 'PGRST116') {
-          console.error('Permission denied - user may not have access to profiles table');
-        } else if (error.code === '42P01') {
-          console.error('Table does not exist - profiles table missing');
-        } else if (error.code === 'PGRST301') {
-          console.error('Row not found - user profile may not exist');
-        }
-        
-        // Retry up to 2 times with exponential backoff
-        if (retryCount < 2) {
-          console.log(`Retrying profile fetch (attempt ${retryCount + 1})...`);
-          await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
-          return fetchUserProfile(userId, retryCount + 1);
-        }
-        
-        return;
+        // Don't log errors loudly, just throw to be handled by caller
+        throw error;
       }
 
       if (data) {
@@ -321,14 +299,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
       }
     } catch (error) {
-      console.error('Error fetching user profile:', error);
-      
-      // Retry up to 2 times with exponential backoff
-      if (retryCount < 2) {
-        console.log(`Retrying profile fetch due to error (attempt ${retryCount + 1})...`);
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
-        return fetchUserProfile(userId, retryCount + 1);
-      }
+      // Re-throw to be handled by caller
+      throw error;
     } finally {
       setProfileLoading(false);
     }
@@ -338,31 +310,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setProfileLoading(true);
       
-      // Create a promise that rejects after 10 seconds (increased timeout)
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 10000);
+      // Try a quick fetch first (3 seconds)
+      const quickTimeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Quick fetch timeout')), 3000);
       });
 
-      // Race between profile fetch and timeout
-      await Promise.race([
-        fetchUserProfile(userId),
-        timeoutPromise
-      ]);
+      try {
+        // Try to fetch profile quickly
+        await Promise.race([
+          fetchUserProfile(userId),
+          quickTimeoutPromise
+        ]);
+        return; // Success!
+      } catch (quickError) {
+        // Quick fetch failed, use minimal profile immediately
+        if (authUser) {
+          const minimalProfile = createMinimalUserProfile(authUser);
+          setUser(minimalProfile);
+          setIsAdmin(false);
+          setLoading(false); // User can use the app now
+          
+          // Continue trying to fetch full profile in background (no await)
+          fetchUserProfile(userId).then(() => {
+            console.log('Full profile loaded in background');
+          }).catch(() => {
+            console.log('Background profile fetch failed, continuing with minimal profile');
+          });
+        }
+      }
     } catch (error) {
-      console.warn('Profile fetch failed or timed out:', error);
-      
-      // Don't logout, just use minimal profile
+      // This shouldn't happen but handle it anyway
       if (authUser) {
-        console.log('Using minimal user profile as fallback');
         const minimalProfile = createMinimalUserProfile(authUser);
         setUser(minimalProfile);
         setIsAdmin(false);
       }
-      // Don't throw error - handle it gracefully
-      return; // Just return instead of throwing
     } finally {
       setProfileLoading(false);
-      setLoading(false); // Always set loading to false
+      setLoading(false);
     }
   };
 

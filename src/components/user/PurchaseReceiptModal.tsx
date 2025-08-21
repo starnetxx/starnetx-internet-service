@@ -59,8 +59,8 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({ purc
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <Card className="w-full max-w-md max-h-[80vh] mb-16 overflow-hidden flex flex-col print:w-[794px]">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]">
+      <Card className="w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col print:w-[794px]">
         <div className="sticky top-0 bg-white p-4 border-b flex justify-between items-center flex-shrink-0">
           <h2 className="text-xl font-bold text-gray-900">Purchase Receipt</h2>
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700">

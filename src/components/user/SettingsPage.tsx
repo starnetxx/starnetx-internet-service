@@ -55,7 +55,7 @@ export const SettingsPage: React.FC = () => {
   }
 
   return (
-    <div className="space-y-8 min-h-[calc(100vh-400px)] max-[380px]:min-h-[calc(100vh-350px)] max-[360px]:min-h-[calc(100vh-320px)] max-[350px]:min-h-[calc(100vh-300px)] max-[400px]:space-y-6">
+    <div className="space-y-8 min-h-[calc(100vh-400px)] max-[380px]:min-h-[calc(100vh-350px)] max-[360px]:min-h-[calc(100vh-320px)] max-[350px]:min-h-[calc(100vh-300px)] max-[400px]:space-y-6 pb-20">
       {/* Hero Section */}
       <div className="text-center space-y-4">
         <div className="relative inline-block">

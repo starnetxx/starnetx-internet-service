@@ -59,24 +59,24 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({ purc
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-[9999]">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 sm:p-4 z-[9999]">
       <Card className="w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col print:w-[794px]">
-        <div className="sticky top-0 bg-white p-4 border-b flex justify-between items-center flex-shrink-0">
-          <h2 className="text-xl font-bold text-gray-900">Purchase Receipt</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-            <X size={24} />
+        <div className="sticky top-0 bg-white p-3 sm:p-4 border-b flex justify-between items-center flex-shrink-0">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900">Purchase Receipt</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 p-1">
+            <X size={20} className="sm:w-6 sm:h-6" />
           </button>
         </div>
 
-        <div id="receipt-content" className="p-6 text-sm leading-tight space-y-4 overflow-y-auto flex-1">
+        <div id="receipt-content" className="p-4 sm:p-6 text-xs sm:text-sm leading-tight space-y-3 sm:space-y-4 overflow-y-auto flex-1">
           {/* Header */}
-          <div className="text-center mb-6">
-            <h1 className="text-2xl font-bold text-blue-600 mb-2">StarNetX</h1>
-            <p className="text-gray-600">Internet Service Receipt</p>
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mt-4 mb-2">
-              <span className="text-green-600 text-2xl">✓</span>
+          <div className="text-center mb-4 sm:mb-6">
+            <h1 className="text-xl sm:text-2xl font-bold text-blue-600 mb-1 sm:mb-2">StarNetX</h1>
+            <p className="text-gray-600 text-xs sm:text-base">Internet Service Receipt</p>
+            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mt-3 sm:mt-4 mb-1 sm:mb-2">
+              <span className="text-green-600 text-xl sm:text-2xl">✓</span>
             </div>
-            <p className="text-green-600 font-semibold">Payment Successful</p>
+            <p className="text-green-600 font-semibold text-xs sm:text-base">Payment Successful</p>
           </div>
 
           {/* Receipt Details */}
@@ -213,15 +213,16 @@ export const PurchaseReceiptModal: React.FC<PurchaseReceiptModalProps> = ({ purc
           </div>
         </div>
 
-        <div className="sticky bottom-0 bg-white p-3 border-t flex gap-3 print:hidden flex-shrink-0">
+        <div className="sticky bottom-0 bg-white p-3 border-t flex gap-2 sm:gap-3 print:hidden flex-shrink-0">
           <Button
             onClick={handleDownloadPDF}
-            className="flex-1 flex items-center justify-center gap-2"
+            className="flex-1 flex items-center justify-center gap-1 sm:gap-2 text-xs sm:text-sm py-2 sm:py-3"
           >
-            <Download size={16} />
-            Download PDF
+            <Download size={14} className="sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">Download PDF</span>
+            <span className="sm:hidden">PDF</span>
           </Button>
-          <Button variant="outline" onClick={onClose} className="flex-1">
+          <Button variant="outline" onClick={onClose} className="flex-1 text-xs sm:text-sm py-2 sm:py-3">
             Close
           </Button>
         </div>

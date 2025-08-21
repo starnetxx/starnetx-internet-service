@@ -120,7 +120,7 @@ export const PlansList: React.FC<PlansListProps> = ({ showAll = false, onSeeAllC
         </div>
       )}
 
-      <div className={showAll ? 'space-y-6' : 'grid grid-cols-2 gap-6'}>
+      <div className={showAll ? 'space-y-6' : 'grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6'}>
         {displayPlans.map((plan, index) => {
           // Dynamic color schemes based on plan type
           const getPlanColors = (planType: string, isPopular: boolean) => {
@@ -195,7 +195,7 @@ export const PlansList: React.FC<PlansListProps> = ({ showAll = false, onSeeAllC
           return (
             <div
             key={plan.id}
-              className={`group relative bg-gradient-to-br ${colors.bg} rounded-3xl p-6 border-2 ${colors.border} transition-all duration-500 ${
+              className={`group relative bg-gradient-to-br ${colors.bg} rounded-3xl p-4 sm:p-6 border-2 ${colors.border} transition-all duration-500 ${
                 plan.popular 
                   ? `ring-4 ${colors.ring} shadow-2xl ${colors.shadow}` 
                   : `ring-2 ${colors.ring} shadow-lg ${colors.shadow} hover:shadow-2xl`
@@ -217,42 +217,42 @@ export const PlansList: React.FC<PlansListProps> = ({ showAll = false, onSeeAllC
                 </div>
               )}
 
-              {/* Plan Icon */}
-              <div className={`relative w-20 h-20 rounded-3xl flex items-center justify-center mb-6 bg-gradient-to-br ${colors.iconBg} shadow-xl border-2 border-white/30`}>
+                            {/* Plan Icon */}
+              <div className={`relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl sm:rounded-3xl flex items-center justify-center mb-4 sm:mb-6 bg-gradient-to-br ${colors.iconBg} shadow-xl border-2 border-white/30`}>
                 {plan.popular ? (
-                  <Sparkles className="text-white" size={28} />
+                  <Sparkles className="text-white" size={24} />
                 ) : (
-                  <Wifi className="text-white" size={28} />
+                  <Wifi className="text-white" size={24} />
                 )}
                 {/* Icon Glow */}
-                <div className="absolute inset-0 bg-white/20 rounded-3xl blur-xl"></div>
+                <div className="absolute inset-0 bg-white/20 rounded-2xl sm:rounded-3xl blur-xl"></div>
               </div>
 
               {/* Plan Details */}
-              <div className="relative space-y-4">
+              <div className="relative space-y-3 sm:space-y-4">
                 <div>
-                  <h3 className="text-2xl font-bold text-white mb-2 drop-shadow-lg">
+                  <h3 className="text-lg sm:text-2xl font-bold text-white mb-1 sm:mb-2 drop-shadow-lg">
                   {plan.name}
                   </h3>
-                  <p className="text-white/90 text-sm font-medium">
+                  <p className="text-white/90 text-xs sm:text-sm font-medium">
                     {plan.dataAmount} • {plan.duration}
-                </p>
+                  </p>
               </div>
 
                 {/* Price */}
-                <div className="pt-2">
-                  <div className="text-4xl font-black text-white drop-shadow-lg">
+                <div className="pt-1 sm:pt-2">
+                  <div className="text-2xl sm:text-4xl font-black text-white drop-shadow-lg">
                     ₦{plan.price.toLocaleString()}
                   </div>
-                  <p className="text-white/80 text-sm font-medium">
+                  <p className="text-white/80 text-xs sm:text-sm font-medium">
                     {plan.duration.toLowerCase()}
                   </p>
             </div>
 
                 {/* Action Button */}
-                <div className="pt-4">
-                  <div className={`w-full py-4 px-6 rounded-2xl text-center font-bold text-lg transition-all duration-300 bg-white/20 backdrop-blur-sm border border-white/30 hover:bg-white/30 hover:scale-105 ${colors.buttonShadow}`}>
-                    {plan.popular ? 'Get Started Now' : 'Select Plan'}
+                <div className="pt-3 sm:pt-4">
+                  <div className={`w-full py-3 sm:py-4 px-4 sm:px-6 rounded-xl sm:rounded-2xl text-center font-bold text-sm sm:text-lg transition-all duration-300 bg-white/20 backdrop-blur-sm border border-white/30 hover:bg-white/30 hover:scale-105 ${colors.buttonShadow}`}>
+                    {plan.popular ? 'Get Started' : 'Select Plan'}
                   </div>
               </div>
               </div>

@@ -15,6 +15,8 @@ import './utils/testDataLoading';
 import './utils/debugStuckLoading';
 // Import data loading debug utility (available in console as window.debugDataLoading)
 import './utils/debugDataLoading';
+// Import Supabase data debug utility (available in console as window.supabaseDebug)
+import './utils/supabaseDataDebug';
 
 function AppContent() {
   const { user, authUser, isAdmin, loading, shouldShowLogin, sessionLoaded } = useAuth();

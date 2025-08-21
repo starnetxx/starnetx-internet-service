@@ -8,10 +8,10 @@ interface WalletCardProps {
 }
 
 export const WalletCard: React.FC<WalletCardProps> = ({ onTopUpClick }) => {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
 
   // Show loading state while user data is being fetched
-  if (loading) {
+  if (!user) {
     return (
       <div className="bg-white/90 backdrop-blur-sm rounded-3xl p-6 shadow-xl border border-gray-100/50 mb-6 animate-pulse">
         <div className="flex items-center justify-between">

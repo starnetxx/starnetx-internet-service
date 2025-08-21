@@ -39,7 +39,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [credentials, setCredentials] = useState<Credential[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start with false, set true only when actually loading
   const [userDataLoading, setUserDataLoading] = useState(false);
   const [isPurchaseInProgress, setIsPurchaseInProgress] = useState(false);
   const [initialLoadStarted, setInitialLoadStarted] = useState(false);
@@ -123,6 +123,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('Initial data load complete');
     } catch (error) {
       console.error('Error loading initial data:', error);
+      setLoading(false); // Ensure loading stops even on error
       // Reset the flag on error so it can retry
       setInitialLoadStarted(false);
       

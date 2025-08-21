@@ -85,10 +85,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         console.log('Starting initial auth session check...');
         
-        // First, try to get the session from Supabase
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (!mounted) return;
+        
+        // Always set sessionLoaded after checking
+        setSessionLoaded(true);
         
         if (error) {
           console.error('Error getting session:', error);
@@ -96,31 +98,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(null);
           setLoading(false);
           setInitialAuthCheck(true);
-          setSessionLoaded(true);
           return;
         }
-
-        // Always set sessionLoaded to true after checking
-        setSessionLoaded(true);
 
         if (session?.user) {
           console.log('Session found, user authenticated:', session.user.email);
           setAuthUser(session.user);
-          
-          // Set loading to false immediately after session is confirmed
-          setLoading(false);
+          setLoading(false); // Set loading false immediately
           setInitialAuthCheck(true);
           
-          // Fetch profile in background without blocking UI
-          fetchUserProfileWithTimeout(session.user.id).then(() => {
-            console.log('Profile loaded successfully');
-          }).catch((profileError) => {
-            console.warn('Profile fetch failed, using minimal profile:', profileError);
-            // Create minimal profile as fallback
-            const minimalProfile = createMinimalUserProfile(session.user);
-            setUser(minimalProfile);
-            setIsAdmin(false);
-          });
+          // Fetch profile in background
+          fetchUserProfileWithTimeout(session.user.id)
+            .then(() => console.log('Profile loaded successfully'))
+            .catch((profileError) => {
+              console.warn('Profile fetch failed, using minimal profile:', profileError);
+              const minimalProfile = createMinimalUserProfile(session.user);
+              setUser(minimalProfile);
+              setIsAdmin(false);
+            });
         } else {
           console.log('No active session found');
           setAuthUser(null);
@@ -154,7 +149,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setSessionLoaded(true);
             
             // Fetch profile without blocking
-            fetchUserProfileWithTimeout(session.user.id).catch((profileError) => {
+            fetchUserProfileWithTimeout(session.user.id)
+            .finally(() => {
+              // Always set loading to false after profile attempt
+              setLoading(false);
+            })
+            .catch((profileError) => {
               console.warn('Profile fetch failed on auth change:', profileError);
               const minimalProfile = createMinimalUserProfile(session.user);
               setUser(minimalProfile);
@@ -180,7 +180,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setAuthUser(session.user);
             setSessionLoaded(true);
             
-            fetchUserProfileWithTimeout(session.user.id).catch((profileError) => {
+            fetchUserProfileWithTimeout(session.user.id)
+            .finally(() => {
+              // Always set loading to false after profile attempt
+              setLoading(false);
+            })
+            .catch((profileError) => {
               console.warn('Profile fetch failed on initial session:', profileError);
               const minimalProfile = createMinimalUserProfile(session.user);
               setUser(minimalProfile);

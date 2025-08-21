@@ -42,7 +42,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [userDataLoading, setUserDataLoading] = useState(false);
   const [isPurchaseInProgress, setIsPurchaseInProgress] = useState(false);
-  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  const [initialLoadStarted, setInitialLoadStarted] = useState(false);
 
   useEffect(() => {
     loadInitialData();
@@ -51,12 +51,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // After auth login, reload user-scoped data so UI reflects purchases without manual refresh
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Only reload data on actual auth events, not on initial session check
-      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
+      console.log('DataContext: Auth state changed:', event);
+      
+      // Only reload data on actual sign in, not on initial session or token refresh
+      if (event === 'SIGNED_IN' && session?.user) {
         try {
           setUserDataLoading(true);
-          // Reload purchases and credentials which are commonly RLS-scoped
-          await Promise.all([loadPurchases(), loadCredentials()]);
+          console.log('User signed in, reloading user data...');
+          // Reload all user data
+          await Promise.all([
+            loadPurchases(), 
+            loadCredentials(),
+            loadTransactions()
+          ]);
         } catch (e) {
           console.error('Error reloading data after login:', e);
         } finally {
@@ -64,6 +71,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } else if (event === 'SIGNED_OUT') {
         // On logout, clear user-scoped data
+        console.log('User signed out, clearing data...');
         setPurchases([]);
         setCredentials([]);
         setTransactions([]);
@@ -77,33 +85,47 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const loadInitialData = async () => {
-    // Prevent multiple initial loads
-    if (initialLoadComplete) return;
+    // Prevent multiple simultaneous initial loads
+    if (initialLoadStarted) {
+      console.log('Initial load already started, skipping...');
+      return;
+    }
+    
+    setInitialLoadStarted(true);
     
     try {
       setLoading(true);
       console.log('Loading initial data...');
       
       // Load public data first (plans and locations)
-      await Promise.all([
+      const publicDataPromise = Promise.all([
         loadPlans(),
         loadLocations()
       ]);
       
-      // Then check if user is authenticated and load user data
+      // Load user data in parallel if authenticated
       const { data: { session } } = await supabase.auth.getSession();
+      
       if (session?.user) {
-        console.log('User authenticated, loading user data...');
+        console.log('User authenticated, loading all data...');
+        // Load everything in parallel for better performance
         await Promise.all([
+          publicDataPromise,
           loadPurchases(),
           loadCredentials(),
           loadTransactions()
         ]);
+      } else {
+        console.log('No user session, loading public data only...');
+        await publicDataPromise;
       }
       
-      setInitialLoadComplete(true);
+      console.log('Initial data load complete');
     } catch (error) {
       console.error('Error loading initial data:', error);
+      // Reset the flag on error so it can retry
+      setInitialLoadStarted(false);
+      
       // Add retry logic for network errors
       if (error instanceof Error && error.message.includes('network')) {
         console.log('Network error detected, retrying in 3 seconds...');
@@ -986,8 +1008,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getAllTransactions,
       refreshData: async () => {
         // Force a fresh load of all data
-        setInitialLoadComplete(false);
-        await loadInitialData();
+        console.log('Refreshing all data...');
+        setLoading(true);
+        try {
+          // Load public data
+          await Promise.all([
+            loadPlans(),
+            loadLocations()
+          ]);
+          
+          // Load user data if authenticated
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            await Promise.all([
+              loadPurchases(),
+              loadCredentials(),
+              loadTransactions()
+            ]);
+          }
+        } catch (error) {
+          console.error('Error refreshing data:', error);
+        } finally {
+          setLoading(false);
+        }
       },
     }}>
       {children}

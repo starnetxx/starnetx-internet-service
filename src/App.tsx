@@ -13,6 +13,8 @@ import './utils/testAuth';
 import './utils/testDataLoading';
 // Import stuck loading debug utility (available in console as window.debugStuckLoading)
 import './utils/debugStuckLoading';
+// Import data loading debug utility (available in console as window.debugDataLoading)
+import './utils/debugDataLoading';
 
 function AppContent() {
   const { user, authUser, isAdmin, loading, shouldShowLogin, sessionLoaded } = useAuth();

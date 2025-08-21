@@ -11,12 +11,14 @@ import './utils/authDebug';
 import './utils/testAuth';
 // Import data loading test utilities (available in console as window.testDataLoading)
 import './utils/testDataLoading';
+// Import stuck loading debug utility (available in console as window.debugStuckLoading)
+import './utils/debugStuckLoading';
 
 function AppContent() {
   const { user, authUser, isAdmin, loading, shouldShowLogin, sessionLoaded } = useAuth();
 
-  // Only show loading if we're still checking for session
-  if (!sessionLoaded && loading) {
+  // Show loading if session hasn't been checked yet OR if we're still loading
+  if (!sessionLoaded || (loading && !authUser)) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-400 via-blue-500 to-green-400 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">

@@ -100,10 +100,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
+        // Always set sessionLoaded to true after checking
+        setSessionLoaded(true);
+
         if (session?.user) {
           console.log('Session found, user authenticated:', session.user.email);
           setAuthUser(session.user);
-          setSessionLoaded(true);
           
           // Set loading to false immediately after session is confirmed
           setLoading(false);
@@ -125,7 +127,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(null);
           setLoading(false);
           setInitialAuthCheck(true);
-          setSessionLoaded(true);
         }
       } catch (error) {
         console.error('Error in getInitialSession:', error);

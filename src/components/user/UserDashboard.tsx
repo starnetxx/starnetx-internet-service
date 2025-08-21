@@ -72,7 +72,7 @@ export const UserDashboard: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-blue-400 via-blue-500 to-green-400">
       <div className="max-w-md mx-auto bg-white min-h-screen relative">
         {/* Header */}
-        <div className="bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 px-4 pt-12 pb-8 relative overflow-hidden">
+        <div className="bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 px-3 sm:px-4 pt-10 sm:pt-12 pb-6 sm:pb-8 relative overflow-hidden">
           {/* Background Pattern */}
           <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-white/10 to-white/5 rounded-b-3xl"></div>
           
@@ -80,18 +80,18 @@ export const UserDashboard: React.FC = () => {
           <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/10 to-transparent rounded-full blur-2xl"></div>
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-br from-white/10 to-transparent rounded-full blur-2xl"></div>
           
-          <div className="flex items-center justify-between mb-8 relative z-10">
+          <div className="flex items-center justify-between mb-6 sm:mb-8 relative z-10">
             <div className="flex items-center justify-between w-full">
-              <h1 className="text-white text-3xl font-black tracking-tight drop-shadow-lg">StarNetX</h1>
-              <div className="flex items-center gap-3">
+              <h1 className="text-white text-xl min-[400px]:text-2xl sm:text-3xl font-black tracking-tight drop-shadow-lg">StarNetX</h1>
+              <div className="flex items-center gap-2 sm:gap-3">
                 <button
                   onClick={handleRefresh}
                   disabled={isRefreshing}
-                  className="p-3 bg-white/20 backdrop-blur-sm rounded-2xl text-white/90 hover:text-white hover:bg-white/30 transition-all duration-200 disabled:opacity-50 border border-white/20"
+                  className="p-2 sm:p-3 bg-white/20 backdrop-blur-sm rounded-xl sm:rounded-2xl text-white/90 hover:text-white hover:bg-white/30 transition-all duration-200 disabled:opacity-50 border border-white/20"
                   title="Refresh"
                 >
                   <svg 
-                    className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} 
+                    className={`w-4 h-4 sm:w-5 sm:h-5 ${isRefreshing ? 'animate-spin' : ''}`} 
                     fill="none" 
                     stroke="currentColor" 
                     viewBox="0 0 24 24"
@@ -101,21 +101,21 @@ export const UserDashboard: React.FC = () => {
                 </button>
                 <button
                   onClick={logout}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-br from-red-500 to-red-600 rounded-2xl text-white font-semibold shadow-lg border border-white/30 hover:from-red-600 hover:to-red-700 transition-all duration-200 hover:scale-105 active:scale-95"
+                  className="flex items-center gap-1 sm:gap-1.5 px-2 min-[400px]:px-3 py-1.5 sm:py-2 bg-gradient-to-br from-red-500 to-red-600 rounded-xl sm:rounded-2xl text-white font-semibold shadow-lg border border-white/30 hover:from-red-600 hover:to-red-700 transition-all duration-200 hover:scale-105 active:scale-95"
                   title="Logout"
                 >
-                  <LogOut className="w-4 h-4" />
-                  <span className="text-sm">Logout</span>
+                  <LogOut className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="text-xs sm:text-sm">Logout</span>
                 </button>
               </div>
             </div>
           </div>
           
-          <div className="mb-6 relative z-10">
-            <h2 className="text-white text-2xl font-bold mb-2 tracking-tight drop-shadow-lg">
+          <div className="mb-4 sm:mb-6 relative z-10">
+            <h2 className="text-white text-lg min-[400px]:text-xl sm:text-2xl font-bold mb-1 sm:mb-2 tracking-tight drop-shadow-lg truncate">
               Hi {user?.email?.split('@')[0] || 'User'},
             </h2>
-            <p className="text-white/90 text-lg font-medium">
+            <p className="text-white/90 text-sm min-[400px]:text-base sm:text-lg font-medium">
               this is your recent usage
             </p>
           </div>

@@ -110,11 +110,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Fetch profile in background
           fetchUserProfileWithTimeout(session.user.id)
             .then(() => console.log('Profile loaded successfully'))
-            .catch((profileError) => {
-              console.warn('Profile fetch failed, using minimal profile:', profileError);
-              const minimalProfile = createMinimalUserProfile(session.user);
-              setUser(minimalProfile);
-              setIsAdmin(false);
+            .finally(() => {
+              // Ensure loading is false and session is loaded
+              setLoading(false);
+              setSessionLoaded(true);
             });
         } else {
           console.log('No active session found');
@@ -150,21 +149,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             
             // Fetch profile without blocking
             fetchUserProfileWithTimeout(session.user.id)
-            .finally(() => {
-              // Always set loading to false after profile attempt
-              setLoading(false);
-            })
-            .catch((profileError) => {
-              console.warn('Profile fetch failed on auth change:', profileError);
-              const minimalProfile = createMinimalUserProfile(session.user);
-              setUser(minimalProfile);
-              setIsAdmin(false);
-            }).finally(() => {
-              if (mounted) {
-                setLoading(false);
-                setInitialAuthCheck(true);
-              }
-            });
+              .then(() => {
+                console.log('Profile loaded after auth change');
+              })
+              .finally(() => {
+                if (mounted) {
+                  setLoading(false);
+                  setInitialAuthCheck(true);
+                }
+              });
           }
         } else if (event === 'SIGNED_OUT') {
           setAuthUser(null);
@@ -345,9 +338,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setProfileLoading(true);
       
-      // Create a promise that rejects after 5 seconds (reduced from 10)
+      // Create a promise that rejects after 10 seconds (increased timeout)
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Profile fetch timeout')), 5000);
+        setTimeout(() => reject(new Error('Profile fetch timeout')), 10000);
       });
 
       // Race between profile fetch and timeout
@@ -365,9 +358,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(minimalProfile);
         setIsAdmin(false);
       }
-      throw error; // Re-throw to be handled by caller
+      // Don't throw error - handle it gracefully
+      return; // Just return instead of throwing
     } finally {
       setProfileLoading(false);
+      setLoading(false); // Always set loading to false
     }
   };
 

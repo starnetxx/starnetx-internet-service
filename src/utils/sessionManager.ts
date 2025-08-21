@@ -45,7 +45,7 @@ class SessionManager {
   }
 
   async clearSession() {
-    console.log('Clearing session...');
+    console.log('Clearing session (preserving remember me)...');
     
     // Stop monitoring
     if (this.sessionTimer) {
@@ -60,17 +60,25 @@ class SessionManager {
       console.error('Error signing out:', error);
     }
 
-    // Clear all auth-related storage
+    // Save remember me credentials before clearing
+    const rememberMeData = localStorage.getItem('starnetx_auth_data');
+    
+    // Clear all auth-related storage (except remember me)
     const keysToRemove: string[] = [];
     
-    // Clear localStorage
+    // Clear localStorage (except remember me)
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && (key.includes('supabase') || key.includes('auth') || key.includes('sb-') || key.includes('starnetx'))) {
+      if (key && key !== 'starnetx_auth_data' && (key.includes('supabase') || key.includes('auth') || key.includes('sb-') || key.includes('starnetx'))) {
         keysToRemove.push(key);
       }
     }
     keysToRemove.forEach(key => localStorage.removeItem(key));
+    
+    // Restore remember me credentials if they existed
+    if (rememberMeData) {
+      localStorage.setItem('starnetx_auth_data', rememberMeData);
+    }
 
     // Clear sessionStorage
     sessionStorage.clear();

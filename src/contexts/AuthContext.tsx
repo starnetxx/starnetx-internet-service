@@ -71,19 +71,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [initialAuthCheck, setInitialAuthCheck] = useState(false);
   const [sessionLoaded, setSessionLoaded] = useState(false);
 
-  // Clear all auth data from storage
+  // Clear all auth data from storage (except remember me credentials)
   const clearAllAuthData = () => {
-    console.log('Clearing all auth data from storage...');
+    console.log('Clearing auth data from storage (preserving remember me)...');
     
-    // Clear localStorage
+    // Save remember me credentials before clearing
+    const rememberMeData = localStorage.getItem('starnetx_auth_data');
+    
+    // Clear localStorage (except remember me)
     const keysToRemove = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && (key.includes('supabase') || key.includes('auth') || key.includes('sb-'))) {
+      if (key && key !== 'starnetx_auth_data' && (key.includes('supabase') || key.includes('auth') || key.includes('sb-') || key.includes('starnetx'))) {
         keysToRemove.push(key);
       }
     }
     keysToRemove.forEach(key => localStorage.removeItem(key));
+    
+    // Restore remember me credentials if they existed
+    if (rememberMeData) {
+      localStorage.setItem('starnetx_auth_data', rememberMeData);
+    }
     
     // Clear sessionStorage
     const sessionKeysToRemove = [];

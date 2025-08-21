@@ -64,25 +64,25 @@ export const RecentTransactions: React.FC<RecentTransactionsProps> = ({ onNaviga
   return (
     <Card className="p-0 mb-6 bg-white border-0 shadow-lg">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-6 rounded-t-lg">
+      <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-4 sm:p-6 rounded-t-lg">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-              <Clock className="text-white" size={20} />
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-xl flex items-center justify-center">
+              <Clock className="text-white" size={16} />
             </div>
             <div>
-              <h3 className="font-bold text-white text-lg">Recent Activity</h3>
-              <p className="text-blue-100 text-sm">Your latest transactions</p>
+              <h3 className="font-bold text-white text-base sm:text-lg">Recent Activity</h3>
+              <p className="text-blue-100 text-xs sm:text-sm">Your latest transactions</p>
             </div>
           </div>
-          <span className="bg-white/20 text-white text-xs px-3 py-1 rounded-full font-medium">
+          <span className="bg-white/20 text-white text-[10px] sm:text-xs px-2 sm:px-3 py-0.5 sm:py-1 rounded-full font-medium">
             {recentTransactions.length} recent
           </span>
         </div>
       </div>
 
       {/* Transactions List */}
-      <div className="p-6 space-y-4">
+      <div className="p-3 sm:p-6 space-y-3 sm:space-y-4">
         {recentTransactions.map((transaction, index) => {
           const plan = plans.find(p => p.id === transaction.planId);
           const location = locations.find(l => l.id === transaction.locationId);
@@ -91,7 +91,7 @@ export const RecentTransactions: React.FC<RecentTransactionsProps> = ({ onNaviga
           return (
             <div 
               key={transaction.id} 
-              className="group relative bg-gradient-to-r from-gray-50 to-blue-50 hover:from-blue-50 hover:to-indigo-50 p-4 rounded-xl border border-gray-100 hover:border-blue-200 transition-all duration-300 hover:shadow-md"
+              className="group relative bg-gradient-to-r from-gray-50 to-blue-50 hover:from-blue-50 hover:to-indigo-50 p-3 sm:p-4 rounded-xl border border-gray-100 hover:border-blue-200 transition-all duration-300 hover:shadow-md"
             >
               {/* Status indicator line */}
               <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${
@@ -99,49 +99,52 @@ export const RecentTransactions: React.FC<RecentTransactionsProps> = ({ onNaviga
                 transaction.status === 'expired' ? 'bg-red-500' : 'bg-yellow-500'
               }`} />
               
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm ${
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-start sm:items-center gap-3 sm:gap-4">
+                  <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shadow-sm flex-shrink-0 ${
                     transaction.status === 'active' ? 'bg-green-100' : 
                     transaction.status === 'expired' ? 'bg-red-100' : 'bg-yellow-100'
                   }`}>
                     <Wifi className={
                       transaction.status === 'active' ? 'text-green-600' : 
                       transaction.status === 'expired' ? 'text-red-600' : 'text-yellow-600'
-                    } size={20} />
+                    } size={18} />
                   </div>
-                  <div>
-                    <p className="font-bold text-gray-900 text-base">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-bold text-gray-900 text-sm sm:text-base truncate">
                       {plan?.name || 'Unknown Plan'}
                     </p>
-                    <div className="flex items-center gap-2 text-xs text-gray-600 mt-1">
-                      <MapPin size={14} />
-                      <span>{location?.name || 'Unknown Location'}</span>
-                      <span className="text-gray-400">•</span>
-                      <span className="text-[11px] text-gray-500">
+                    <div className="flex flex-wrap items-center gap-1 sm:gap-2 text-xs text-gray-600 mt-1">
+                      <div className="flex items-center gap-1">
+                        <MapPin size={12} />
+                        <span className="truncate max-w-[100px] sm:max-w-none">{location?.name || 'Unknown'}</span>
+                      </div>
+                      <span className="text-gray-400 hidden sm:inline">•</span>
+                      <span className="text-[10px] sm:text-[11px] text-gray-500">
                         {purchaseDate.toLocaleDateString('en-US', { 
                           month: 'short', 
-                          day: 'numeric',
+                          day: 'numeric'
+                        })}, {purchaseDate.toLocaleTimeString('en-US', {
                           hour: '2-digit',
                           minute: '2-digit'
                         })}
                       </span>
                     </div>
                     {transaction.status === 'active' && transaction.mikrotikCredentials && (
-                      <div className="mt-1 flex items-center gap-2 overflow-x-auto">
-                        <span className="text-xs text-blue-600 font-medium bg-blue-50 px-2 py-1 rounded-md whitespace-nowrap flex-shrink-0">
-                          Username: {transaction.mikrotikCredentials.username}
+                      <div className="mt-1">
+                        <span className="text-[10px] sm:text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 sm:py-1 rounded-md inline-block">
+                          User: {transaction.mikrotikCredentials.username}
                         </span>
                       </div>
                     )}
                   </div>
                 </div>
                 
-                <div className="text-right">
-                  <span className={`text-xs px-3 py-1 rounded-full font-bold ${getStatusColor(transaction.status)}`}>
+                <div className="flex items-center justify-between sm:block sm:text-right">
+                  <span className={`text-[10px] sm:text-xs px-2 sm:px-3 py-0.5 sm:py-1 rounded-full font-bold ${getStatusColor(transaction.status)}`}>
                     {getStatusText(transaction.status)}
                   </span>
-                  <p className="text-lg font-bold text-gray-900 mt-2">
+                  <p className="text-base sm:text-lg font-bold text-gray-900 sm:mt-2">
                     ₦{transaction.amount.toLocaleString()}
                   </p>
                 </div>

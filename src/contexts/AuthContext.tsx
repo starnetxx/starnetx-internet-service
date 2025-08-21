@@ -71,6 +71,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [initialAuthCheck, setInitialAuthCheck] = useState(false);
   const [sessionLoaded, setSessionLoaded] = useState(false);
 
+  // Clear all auth data from storage
+  const clearAllAuthData = () => {
+    console.log('Clearing all auth data from storage...');
+    
+    // Clear localStorage
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.includes('supabase') || key.includes('auth') || key.includes('sb-'))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+    
+    // Clear sessionStorage
+    const sessionKeysToRemove = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      if (key && (key.includes('supabase') || key.includes('auth') || key.includes('sb-'))) {
+        sessionKeysToRemove.push(key);
+      }
+    }
+    sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
+    
+    // Clear cookies (if accessible)
+    document.cookie.split(";").forEach((c) => {
+      document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+    });
+  };
+
   useEffect(() => {
     let mounted = true;
 
@@ -85,51 +115,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         console.log('Starting initial auth session check...');
         
-        // Create a timeout promise that rejects after 5 seconds
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Session check timeout')), 5000);
-        });
+        // Clear all auth data on page refresh to force re-authentication
+        clearAllAuthData();
         
-        // Race between session check and timeout
-        const { data: { session }, error } = await Promise.race([
-          supabase.auth.getSession(),
-          timeoutPromise
-        ]).catch((err) => {
-          console.warn('Session check timed out or failed:', err);
-          return { data: { session: null }, error: err };
-        });
+        // Sign out from Supabase to ensure clean state
+        await supabase.auth.signOut();
         
-        if (!mounted) return;
-        
-        if (error) {
-          console.error('Error getting session:', error);
-          setAuthUser(null);
-          setUser(null);
-          setLoading(false);
-          setInitialAuthCheck(true);
-          setSessionLoaded(true);
-          return;
-        }
-
-        if (session?.user) {
-          console.log('Session found, user authenticated:', session.user.email);
-          setAuthUser(session.user);
-          setLoading(false); // Set loading false immediately
-          setInitialAuthCheck(true);
-          setSessionLoaded(true); // Mark session as loaded immediately
-          
-          // Fetch profile in background without blocking
-          fetchUserProfileWithTimeout(session.user.id)
-            .then(() => console.log('Profile loaded successfully'))
-            .catch((err) => console.log('Profile load failed, using minimal profile'));
-        } else {
-          console.log('No active session found');
-          setAuthUser(null);
-          setUser(null);
-          setLoading(false);
-          setInitialAuthCheck(true);
-          setSessionLoaded(true);
-        }
+        console.log('Cleared auth data, showing login page');
+        setAuthUser(null);
+        setUser(null);
+        setLoading(false);
+        setInitialAuthCheck(true);
+        setSessionLoaded(true);
       } catch (error) {
         console.error('Unexpected error in getInitialSession:', error);
         if (mounted) {

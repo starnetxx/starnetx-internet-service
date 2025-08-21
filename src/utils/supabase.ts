@@ -9,9 +9,43 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: true,
-    autoRefreshToken: true,
+    persistSession: false, // Don't persist session in storage
+    autoRefreshToken: false, // Don't auto-refresh tokens
     detectSessionInUrl: true,
+    storageKey: 'starnetx-auth-token',
+    storage: {
+      // Custom storage that expires after 5 minutes
+      getItem: (key: string) => {
+        const item = localStorage.getItem(key);
+        if (!item) return null;
+        
+        try {
+          const data = JSON.parse(item);
+          const now = new Date().getTime();
+          
+          // Check if data has expired (5 minutes = 300000ms)
+          if (data.expiry && now > data.expiry) {
+            localStorage.removeItem(key);
+            return null;
+          }
+          
+          return JSON.stringify(data.value);
+        } catch {
+          return item;
+        }
+      },
+      setItem: (key: string, value: string) => {
+        const now = new Date().getTime();
+        const item = {
+          value: JSON.parse(value),
+          expiry: now + (5 * 60 * 1000), // 5 minutes from now
+        };
+        localStorage.setItem(key, JSON.stringify(item));
+      },
+      removeItem: (key: string) => {
+        localStorage.removeItem(key);
+      },
+    },
   },
   realtime: {
     params: {

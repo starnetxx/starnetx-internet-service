@@ -101,9 +101,10 @@ export const AuthForm: React.FC<AuthFormProps> = ({ isAdmin = false }) => {
           setError('Invalid admin credentials or insufficient permissions');
         }
       } else if (isLogin) {
-        success = await login(email, password);
+        const result = await login(email, password);
+        success = result.success;
         if (!success) {
-          setError('Invalid email or password');
+          setError(result.error || 'Invalid email or password. Please check your credentials and try again.');
         } else {
           // Save or clear credentials based on remember me
           secureStorage.saveCredentials(email, password, rememberMe);

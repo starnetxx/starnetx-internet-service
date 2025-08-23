@@ -11,7 +11,7 @@ interface AuthContextType {
   profileLoading: boolean;
   initialAuthCheck: boolean;
   sessionLoaded: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   adminLogin: (email: string, password: string) => Promise<boolean>;
   register: (email: string, password: string, phone?: string, referredBy?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
@@ -398,7 +398,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return Math.random().toString(36).substring(2, 8).toUpperCase();
   };
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       setLoading(true);
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -409,7 +409,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('Login error:', error);
         setLoading(false);
-        return false;
+        
+        // Provide specific error messages based on the error type
+        if (error.message?.includes('Invalid login credentials')) {
+          return { success: false, error: 'Invalid email or password. Please check your credentials and try again.' };
+        }
+        if (error.message?.includes('Email not confirmed')) {
+          return { success: false, error: 'Please verify your email address before logging in.' };
+        }
+        if (error.message?.includes('Too many requests')) {
+          return { success: false, error: 'Too many login attempts. Please wait a few minutes and try again.' };
+        }
+        if (error.message?.includes('User not found')) {
+          return { success: false, error: 'No account found with this email. Please sign up first.' };
+        }
+        if (error.message?.includes('Network')) {
+          return { success: false, error: 'Network error. Please check your internet connection and try again.' };
+        }
+        
+        // Generic error fallback
+        return { success: false, error: 'Login failed. Please try again or contact support if the issue persists.' };
       }
 
       if (data.user) {
@@ -429,23 +448,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         setLoading(false);
         setInitialAuthCheck(true);
-        return true;
+        return { success: true };
       }
 
       setLoading(false);
-      return false;
-    } catch (error) {
+      return { success: false, error: 'Login failed. Please try again.' };
+    } catch (error: any) {
       console.error('Login error:', error);
       setLoading(false);
-      return false;
+      
+      // Handle unexpected errors
+      if (error?.message) {
+        return { success: false, error: `Login failed: ${error.message}` };
+      }
+      return { success: false, error: 'An unexpected error occurred. Please try again.' };
     }
   };
 
   const adminLogin = async (email: string, password: string): Promise<boolean> => {
     try {
       // First try regular login
-      const loginSuccess = await login(email, password);
-      if (!loginSuccess) return false;
+      const loginResult = await login(email, password);
+      if (!loginResult.success) return false;
 
       // Check if user is admin after profile is fetched
       // We need to wait a bit for the profile to be fetched

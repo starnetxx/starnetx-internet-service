@@ -21,8 +21,8 @@ export const TransactionsView: React.FC = () => {
         .from('transactions')
         .select('id, user_id, amount, status, reference, details, created_at')
         .eq('type', 'wallet_funding')
-        .order('created_at', { ascending: false })
-        .limit(20);
+        .order('created_at', { ascending: false });
+      // Removed limit to fetch all wallet funding records
       setFundings(data || []);
     })();
   }, []);

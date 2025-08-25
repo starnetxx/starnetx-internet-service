@@ -264,10 +264,16 @@ export const CredentialManager: React.FC = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Plan Types</option>
-              <option value="3-hour">3-Hour</option>
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
+              {/* Generate options from unique plan types */}
+              {Array.from(new Set(plans.map(p => p.type))).map(type => (
+                <option key={type} value={type}>
+                  {type === '3-hour' ? '3-Hour' : 
+                   type === 'daily' ? 'Daily' : 
+                   type === 'weekly' ? 'Weekly' : 
+                   type === 'monthly' ? 'Monthly' : 
+                   type === 'custom' ? 'Custom' : type}
+                </option>
+              ))}
             </select>
           </div>
         </div>

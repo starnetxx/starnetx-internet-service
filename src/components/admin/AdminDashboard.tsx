@@ -15,6 +15,7 @@ import { AdminSettings } from './AdminSettings';
 import { NotificationManager } from './NotificationManager';
 import { User } from '../../types';
 import { debugAdminDataLoading } from '../../utils/debugAdminData';
+import { testRLS } from '../../utils/testRLS';
 
 type AdminPage = 'overview' | 'plans' | 'locations' | 'credentials' | 'transactions' | 'referrals' | 'users' | 'leaderboard' | 'notifications' | 'settings';
 
@@ -212,16 +213,28 @@ const AdminOverview: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold text-gray-900">Dashboard Overview</h2>
-        <Button 
-          onClick={() => {
-            console.log('Running debug...');
-            debugAdminDataLoading();
-          }}
-          variant="outline"
-          size="sm"
-        >
-          Debug Data Loading
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            onClick={() => {
+              console.log('Running debug...');
+              debugAdminDataLoading();
+            }}
+            variant="outline"
+            size="sm"
+          >
+            Debug Data Loading
+          </Button>
+          <Button 
+            onClick={() => {
+              console.log('Testing RLS...');
+              testRLS();
+            }}
+            variant="outline"
+            size="sm"
+          >
+            Test RLS
+          </Button>
+        </div>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
